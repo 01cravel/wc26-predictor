@@ -84,31 +84,27 @@
   .m{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:11px 12px;margin-bottom:10px}
   .m .meta{display:flex;justify-content:space-between;font-size:10.5px;color:var(--mut);letter-spacing:.4px;margin-bottom:9px}
   .m .grp{color:var(--cyan);font-weight:700}
-  .row{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:6px}
-  .team{display:flex;align-items:center;gap:7px;min-width:0}
-  .team.away{justify-content:flex-end;text-align:right;flex-direction:row-reverse}
-  .team .fl{font-size:23px;line-height:1;flex:none}
-  .team .nm{font-size:13.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .score{display:flex;align-items:center;gap:6px;justify-content:center}
-  .stp{display:flex;flex-direction:column;align-items:center;gap:5px}
-  .stp button{width:46px;height:42px;border:none;border-radius:11px;background:var(--card2);color:var(--txt);
-    font-size:24px;font-weight:800;cursor:pointer;display:grid;place-items:center;line-height:1;border:1px solid var(--line)}
-  .stp button:active{transform:scale(.92)}
-  .stp .val{font-family:'Anton';font-size:26px;width:46px;text-align:center;
-    background:var(--ink2);border-radius:9px;padding:4px 0;border:1px solid var(--line2)}
-  .vs{font-size:11px;color:var(--mut);font-weight:800}
-  .m.locked .stp button{display:none}
+  /* one row per team: flag · name · [ − value + ] — big chunky horizontal steppers */
+  .teams{display:flex;flex-direction:column;gap:9px;margin-top:2px}
+  .trow{display:flex;align-items:center;gap:10px;min-height:50px}
+  .trow .fl{font-size:26px;line-height:1;flex:none}
+  .trow .nm{font-size:15px;font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .stp{display:flex;align-items:center;gap:9px;flex:none}
+  .stp button{width:54px;height:50px;border:1px solid var(--line2);border-radius:13px;background:var(--card2);color:var(--txt);
+    font-size:30px;font-weight:800;cursor:pointer;display:grid;place-items:center;line-height:1}
+  .stp button:active{transform:scale(.9);background:var(--ink2)}
+  .stp .val{font-family:'Anton';font-size:30px;width:50px;text-align:center;color:var(--txt);
+    background:var(--ink2);border-radius:11px;padding:6px 0;border:1px solid var(--line2)}
   .m.scored{border-color:var(--line2)}
   .m.set{border-color:rgba(0,224,106,.4)}
   .m.set .stp .val{color:var(--green)}
   .m:not(.set):not(.scored) .stp .val{color:var(--mut)}
   .picked{color:var(--green);font-weight:800;letter-spacing:.3px}
-  .nopick{color:var(--mut);font-style:italic;font-size:13px;font-weight:600}
+  .nopick{color:var(--mut);font-style:italic;font-size:16px;font-weight:700;min-width:50px;text-align:center}
   .editbtn{background:var(--card2);border:1px solid var(--line2);color:var(--cyan);font-family:'Archivo';
-    font-weight:800;font-size:11px;padding:5px 14px;border-radius:20px;cursor:pointer;letter-spacing:.3px}
+    font-weight:800;font-size:12px;padding:6px 15px;border-radius:20px;cursor:pointer;letter-spacing:.3px}
   .editbtn:active{transform:translateY(1px)}
-  .sval{font-family:'Anton';font-size:26px;width:46px;text-align:center;color:var(--green);
-    background:var(--ink2);border-radius:9px;padding:4px 0;border:1px solid var(--line2)}
+  .sval{font-family:'Anton';font-size:30px;min-width:50px;text-align:center;color:var(--green);padding:6px 6px}
   .m.done{border-color:rgba(0,224,106,.4)}
   .m.locked .sval,.m.scored .sval{color:var(--txt)}
   .pts{margin-top:9px;display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--mut)}
@@ -606,28 +602,25 @@ function matchCard(m,hv,av,locked,res,pred){
   else if(isSet) metaRight='<span class="picked">✓ picked</span>';
   else metaRight=m.time+' UK';
 
-  let scoreHtml;
-  if(!isSet && !editable)                       // locked/over with no prediction
-    scoreHtml='<div class="score"><span class="nopick">no pick</span></div>';
-  else if(editable && (!isSet || editing))      // open & (unpicked or being edited) → steppers
-    scoreHtml='<div class="score">'+stepper("h",hv)+'<span class="vs">v</span>'+stepper("a",av)+'</div>';
-  else                                          // picked but read-only (collapsed / locked / scored)
-    scoreHtml='<div class="score">'+staticVal(hv)+'<span class="vs">v</span>'+staticVal(av)+'</div>';
+  const showSteppers = editable && (!isSet || editing);
+  // per-team control: steppers when editing, "no pick" when locked & unpicked, else a read-only value
+  const ctrl=(side,v)=> showSteppers ? stepper(side,v)
+    : (!isSet && !editable) ? '<span class="nopick">–</span>'
+    : staticVal(v);
 
   return '<div class="m'+(locked?' locked':'')+(res?' scored':'')+(isSet?' set':'')+(collapsed?' done':'')+'" data-id="'+m.id+'">'
     +'<div class="meta"><span class="grp">GROUP '+m.grp+'</span><span>'+metaRight+'</span></div>'
-    +'<div class="row">'
-      +'<div class="team"><span class="fl">'+m.hf+'</span><span class="nm">'+m.h+'</span></div>'
-      +scoreHtml
-      +'<div class="team away"><span class="fl">'+m.af+'</span><span class="nm">'+m.a+'</span></div>'
+    +'<div class="teams">'
+      +'<div class="trow"><span class="fl">'+m.hf+'</span><span class="nm">'+m.h+'</span>'+ctrl("h",hv)+'</div>'
+      +'<div class="trow"><span class="fl">'+m.af+'</span><span class="nm">'+m.a+'</span>'+ctrl("a",av)+'</div>'
     +'</div>'+ptsHtml+'</div>';
 }
 function staticVal(v){return '<span class="sval">'+v+'</span>';}
 function stepper(side,val){
   return '<div class="stp" data-side="'+side+'">'
-    +'<button data-d="1">+</button>'
+    +'<button data-d="-1" aria-label="minus">−</button>'
     +'<span class="val">'+val+'</span>'
-    +'<button data-d="-1">−</button></div>';
+    +'<button data-d="1" aria-label="plus">+</button></div>';
 }
 function wireSteppers(){
   view.querySelectorAll(".m:not(.locked)").forEach(card=>{
@@ -786,15 +779,12 @@ function resultsListHtml(editable){
   list.forEach(m=>{
     if(m.day!==lastDay){h+='<div class="day">'+m.day+'</div>';lastDay=m.day;}
     const r=results[m.id];const hv=r?r.h:0,av=r?r.a:0;
-    const sc = editable
-      ? '<div class="score">'+stepper("h",hv)+'<span class="vs">v</span>'+stepper("a",av)+'</div>'
-      : '<div class="score"><span class="val" style="font-family:Anton;font-size:24px;width:34px;text-align:center;background:var(--ink2);border-radius:9px;padding:3px 0;border:1px solid var(--line2)">'+(r?r.h:'–')+'</span><span class="vs">v</span><span class="val" style="font-family:Anton;font-size:24px;width:34px;text-align:center;background:var(--ink2);border-radius:9px;padding:3px 0;border:1px solid var(--line2)">'+(r?r.a:'–')+'</span></div>';
-    h+='<div class="m" data-id="'+m.id+'">'
+    const ctrl=(side,v)=> editable ? stepper(side,v) : '<span class="sval">'+(r?v:'–')+'</span>';
+    h+='<div class="m'+(r?' scored':'')+'" data-id="'+m.id+'">'
       +'<div class="meta"><span class="grp">GROUP '+m.grp+'</span><span>'+(r?'✓ result in':m.time+' UK')+'</span></div>'
-      +'<div class="row">'
-        +'<div class="team"><span class="fl">'+m.hf+'</span><span class="nm">'+m.h+'</span></div>'
-        +sc
-        +'<div class="team away"><span class="fl">'+m.af+'</span><span class="nm">'+m.a+'</span></div>'
+      +'<div class="teams">'
+        +'<div class="trow"><span class="fl">'+m.hf+'</span><span class="nm">'+m.h+'</span>'+ctrl("h",hv)+'</div>'
+        +'<div class="trow"><span class="fl">'+m.af+'</span><span class="nm">'+m.a+'</span>'+ctrl("a",av)+'</div>'
       +'</div></div>';
   });
   return h;

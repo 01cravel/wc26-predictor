@@ -276,7 +276,7 @@ async function run(){
   check('Save bar hidden when nothing left to edit', doc.getElementById('savebar').classList.contains('hide'));
   // a partial player (40/72) should show "no pick" on the games they never predicted
   S.setPlayer(valid[1].name); S.setPicks(valid[1].picks); S.setTab('predict'); S.render(); await settle(doc);
-  const noPick=doc.querySelectorAll('.m .nopick').length;
+  const noPick=[...doc.querySelectorAll('.m')].filter(c=>c.querySelector('.nopick')).length;
   check('Unpredicted locked games read "no pick"', noPick===MATCHES.length-Object.keys(valid[1].picks).length, noPick+' no-pick / exp '+(MATCHES.length-Object.keys(valid[1].picks).length));
   S.setPicks({});
   win.Date.now=realNow;
