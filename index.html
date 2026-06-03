@@ -382,16 +382,18 @@ function scoreFor(pred,res){
 function initials(n){return n.split(" ").map(w=>w[0]).slice(0,2).join("").toUpperCase();}
 function flash(t){const f=el("flash");f.textContent=t;f.classList.add("show");setTimeout(()=>f.classList.remove("show"),1500);}
 
-// Reusable centre-screen pop-up.
-function showModal({ico,title,body,btn,onClose}){
+// Reusable centre-screen pop-up. Optional secondary button via btn2/onBtn2.
+function showModal({ico,title,body,btn,onClose,btn2,onBtn2}){
   const m=el("modal");
-  el("modalCard").innerHTML=(ico?'<div class="ico">'+ico+'</div>':'')
-    +(title?'<h3>'+title+'</h3>':'')
-    +'<p>'+body+'</p><button class="btn" id="modalBtn">'+(btn||'OK')+'</button>';
+  let h=(ico?'<div class="ico">'+ico+'</div>':'')+(title?'<h3>'+title+'</h3>':'')+'<p>'+body+'</p>'
+    +'<button class="btn" id="modalBtn">'+(btn||'OK')+'</button>';
+  if(btn2) h+='<button class="btn ghost" id="modalBtn2" style="margin-top:9px">'+btn2+'</button>';
+  el("modalCard").innerHTML=h;
   m.classList.add("show");
-  const close=()=>{ m.classList.remove("show"); m.onclick=null; if(onClose)onClose(); };
-  el("modalBtn").onclick=close;
-  m.onclick=e=>{ if(e.target===m) close(); };   // tap backdrop to dismiss
+  const dismiss=()=>{ m.classList.remove("show"); m.onclick=null; };
+  el("modalBtn").onclick=()=>{ dismiss(); if(onClose)onClose(); };
+  if(btn2) el("modalBtn2").onclick=()=>{ dismiss(); if(onBtn2)onBtn2(); };
+  m.onclick=e=>{ if(e.target!==m) return; dismiss(); if(!btn2 && onClose) onClose(); };  // backdrop: single-button acts, two-button just closes
 }
 // Show a one-time intro the first time a tab is opened on this device.
 function tabIntro(key,opts){
@@ -876,7 +878,21 @@ document.querySelectorAll("nav button").forEach(b=>{
     else if(tab==="results") tabIntro("wc26:seenResultsIntro",{ico:'📋',title:'Results',body:'The results will show here when they come in.',btn:'Got it'});
   };
 });
-el("saveBtn").onclick=saveMine;
+function onSaveClick(){
+  if(!player)return;
+  const left=openMatches().filter(m=>!picks[m.id]).length;   // still-open games with no prediction
+  if(left>0){
+    showModal({
+      ico:'📝', title:'Not finished yet',
+      body:"You haven't predicted all the games — <b>"+left+"</b> still to go. Finish them now, or save these and come back any time before they lock.",
+      btn:'Continue and do it now', onClose:()=>jumpToNext(false),
+      btn2:"I'll do it later — save these", onBtn2:saveMine
+    });
+    return;
+  }
+  saveMine();
+}
+el("saveBtn").onclick=onSaveClick;
 el("nextBtn").onclick=()=>jumpToNext(false);
 // Guard against losing unsaved predictions on reload / tab close.
 window.addEventListener("beforeunload",e=>{if(dirty){e.preventDefault();e.returnValue="";}});
@@ -899,7 +915,7 @@ if(_LOCALHOST && new URLSearchParams(location.search).has("sim")){
     setTab:t=>{tab=t;}, getTab:()=>tab,
     setPlayer:p=>{player=p;}, setResults:r=>{results=r;}, setStoreReady:v=>{storeReady=v;},
     matchLocked, openCount:()=>openMatches().length,
-    setPicks:p=>{picks=p;}, getPicks:()=>picks, jumpToNext, setDirty:d=>{dirty=d;}, setEdit:id=>{editId=id;},
+    setPicks:p=>{picks=p;}, getPicks:()=>picks, jumpToNext, setDirty:d=>{dirty=d;}, setEdit:id=>{editId=id;}, noWrites:()=>{db=null;},
     detach:()=>{ if(unsubKv){try{unsubKv();}catch(e){}} unsubKv=null; },   // isolate from the live DB
     clearCache:()=>{ for(const k in cache) delete cache[k]; }
   };

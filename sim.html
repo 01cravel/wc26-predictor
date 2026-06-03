@@ -351,6 +351,26 @@ async function run(){
   check('Shows a retry screen when the server is unreachable', /reach the server/i.test(doc.getElementById('view').textContent) && !!doc.getElementById('retryBtn'));
   S.setStoreReady(true);
 
+  // ---- incomplete-save warning ----
+  group('Incomplete-save warning');
+  win.Date.now=realNow;                 // every game open today
+  S.noWrites();                         // saves become no-ops — never touch the live DB
+  S.setPlayer(valid[0].name); S.setEdit(null);
+  const partial={}; MATCHES.slice(0,6).forEach(m=>partial[m.id]={h:1,a:0});   // 6 of 10 done -> 4 left
+  S.setPicks(partial); S.setTab('predict'); S.render(); await settle(doc);
+  doc.getElementById('saveBtn').click(); await settle(doc);
+  const mc=()=>doc.getElementById('modalCard').textContent;
+  check('Warns when not all games are predicted', doc.getElementById('modal').classList.contains('show') && /still to go/.test(mc()));
+  check('States the correct number left', (mc().match(/(\d+) still to go/)||[])[1]==='4', 'says "'+(mc().match(/\d+ still to go/)||['?'])[0]+'"');
+  check('Offers two choices (finish now / save later)', !!doc.getElementById('modalBtn') && !!doc.getElementById('modalBtn2'));
+  doc.getElementById('modalBtn').click(); await settle(doc);    // "Continue and do it now"
+  check('Continue closes the warning without saving', !doc.getElementById('modal').classList.contains('show'));
+  const full={}; MATCHES.forEach(m=>full[m.id]={h:1,a:0});      // all 10 done
+  S.setPicks(full); S.setTab('predict'); S.render(); await settle(doc);
+  doc.getElementById('saveBtn').click(); await settle(doc);
+  check('No warning when everything is predicted', !(doc.getElementById('modal').classList.contains('show') && /still to go/.test(mc())));
+  S.setPicks({});
+
   // ---- verdict ----
   const ok = failN===0;
   summary.className = ok?'pass':'fail';
