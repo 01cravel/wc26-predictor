@@ -145,6 +145,8 @@
   .pr .pv{font-family:'Anton';font-size:15px;color:var(--mut);min-width:42px;text-align:center}
   .pr .pp{font-size:10px;font-weight:800;padding:2px 8px;border-radius:20px;min-width:30px;text-align:center}
   .pr .miss{color:var(--mut);font-style:italic;font-size:12px}
+  .crowd{font-size:11.5px;color:var(--gold);font-weight:700;padding:5px 0 3px;letter-spacing:.2px}
+  .crowd b{font-family:'Anton';color:var(--txt);font-size:14px;letter-spacing:.5px;margin:0 2px}
   .saved-flash{position:fixed;left:50%;top:80px;transform:translateX(-50%);z-index:60;
     background:var(--green);color:#06210f;font-weight:800;padding:11px 20px;border-radius:30px;
     box-shadow:0 8px 24px rgba(0,224,106,.4);opacity:0;transition:.25s;pointer-events:none;font-size:14px}
@@ -170,6 +172,9 @@
   .lb-card.r1{border-color:rgba(255,203,43,.5);background:linear-gradient(180deg,rgba(255,203,43,.08),var(--card))}
   .lb-card .nm{font-weight:700;font-size:15px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .lb-card .sub{font-size:11px;color:var(--mut);font-weight:400}
+  .lb-card .form{display:flex;gap:4px;margin-top:6px}
+  .lb-card .fd{width:9px;height:9px;border-radius:50%}
+  .lb-card .fd.f3{background:var(--green)} .lb-card .fd.f1{background:var(--gold)} .lb-card .fd.f0{background:var(--red)}
   .lb-card .tot{font-family:'Anton';font-size:26px;color:var(--green)}
   .lb-card .tot small{font-family:'Archivo';font-size:10px;color:var(--mut);display:block;text-align:right;font-weight:600}
 
@@ -675,13 +680,14 @@ async function renderTable(){
     const raw=await sGet(slug(n));if(!raw)continue;
     const d=safeParse(raw,null);if(!d)continue;
     const dp=safePicks(d);
-    let tot=0,exact=0,correct=0,played=0;
+    let tot=0,exact=0,correct=0,played=0;const form=[];
     for(const m of MATCHES){
       const s=scoreFor(dp[m.id],results[m.id]);
       if(s===null)continue;
       played++;tot+=s;if(s===3)exact++;else if(s===1)correct++;
+      form.push(s);                                 // chronological run of scored games
     }
-    rows.push({n,tot,exact,correct,played,made:Object.keys(dp).length});
+    rows.push({n,tot,exact,correct,played,made:Object.keys(dp).length,form});
   }
   const anyResults=Object.keys(results).length>0;
   // Until points exist, it's just an alphabetical roster; once results come in, rank by points.
@@ -700,9 +706,12 @@ async function renderTable(){
     // No medals or winner styling until there are points — just a clean alphabetical list.
     const cls=anyResults&&rank<=3?" r"+rank:"";
     const medal=!anyResults?"·":(rank===1?"🥇":rank===2?"🥈":rank===3?"🥉":"#"+rank);
+    const formHtml=(anyResults&&r.form.length)
+      ? '<div class="form">'+r.form.slice(-8).map(s=>'<span class="fd '+(s===3?'f3':s===1?'f1':'f0')+'" title="'+(s===3?'+3 exact':s===1?'+1 result':'0 pts')+'"></span>').join('')+'</div>'
+      : '';
     h+='<div class="lb-card'+cls+'">'
       +'<div class="rk">'+medal+'</div>'
-      +'<div class="nm">'+r.n+'<span class="sub" style="display:block">'+(anyResults?(r.exact+' exact · '+r.correct+' result · '+r.played+' scored'):(r.made+' / '+MATCHES.length+' picks made'))+'</span></div>'
+      +'<div class="nm">'+r.n+'<span class="sub" style="display:block">'+(anyResults?(r.exact+' exact · '+r.correct+' result · '+r.played+' scored'):(r.made+' / '+MATCHES.length+' picks made'))+'</span>'+formHtml+'</div>'
       +'<div class="tot">'+r.tot+'<small>POINTS</small></div></div>';
   });
   view.innerHTML=h;
@@ -816,6 +825,7 @@ async function renderPicks(){
     if(!locked){
       h+='<div class="pr"><span class="miss">🔒 Picks hidden until matchday ('+m.day.replace(/^\w+\s/,"")+')</span></div>';
     }else{
+      h+=crowdFav(m,all);                          // 👑 the group's most-tipped scoreline
       all.forEach(pl=>{
         const p=pl.picks[m.id];
         if(!p){h+='<div class="pr"><span class="pn">'+pl.n+'</span><span class="miss">— no pick</span></div>';return;}
@@ -829,6 +839,15 @@ async function renderPicks(){
   });
   view.innerHTML=h;
   el("fbar").querySelectorAll("button").forEach(b=>b.onclick=()=>{groupFilter=b.dataset.g;render();});
+}
+// The group's most popular scoreline for a game.
+function crowdFav(m,all){
+  const tally={};let pickers=0;
+  all.forEach(pl=>{const p=pl.picks[m.id];if(p){pickers++;const k=p.h+'–'+p.a;tally[k]=(tally[k]||0)+1;}});
+  let topK=null,topN=0;
+  for(const k in tally){ if(tally[k]>topN){topN=tally[k];topK=k;} }
+  if(!topK) return '';
+  return '<div class="crowd">👑 Most tipped <b>'+topK+'</b> · '+topN+' of '+pickers+'</div>';
 }
 async function loadAllPicks(){
   const keys=await sList("wc26:pred:");

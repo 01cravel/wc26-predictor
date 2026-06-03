@@ -302,6 +302,32 @@ async function run(){
   let threw=false; try{ S.setTab('table'); S.render(); await settle(doc); }catch(e){ threw=true; }
   check('Corrupt results doc does not crash render', !threw && doc.querySelectorAll('.lb-card').length===valid.length, doc.querySelectorAll('.lb-card').length+' cards');
 
+  // ---- crowd favourite & form guide (controlled scenario) ----
+  group('Crowd favourite & form guide');
+  win.Date.now=()=>Date.parse('2026-07-01T12:00:00Z');   // all games revealed
+  S.clearCache();
+  const mids=MATCHES.map(m=>m.id);
+  const mkP=p=>JSON.stringify({pin:'h',picks:p});
+  const pf=base=>{const o={};mids.forEach(id=>o[id]={h:base,a:0});return o;};
+  S.cache[slug('Andy Mathews')]=mkP({...pf(1),[mids[0]]:{h:1,a:0}});   // m1: 1-0
+  S.cache[slug('Carl Darley')]=mkP({...pf(1),[mids[0]]:{h:1,a:0}});    // m1: 1-0
+  S.cache[slug('Joe Sugden')]=mkP({...pf(2),[mids[0]]:{h:1,a:0}});     // m1: 1-0  -> 3x 1-0
+  S.cache[slug('Sam Hodgson')]=mkP({...pf(0),[mids[0]]:{h:2,a:1}});    // m1: 2-1
+  S.cache[slug('Liam Stanhope')]=mkP({...pf(3),[mids[0]]:{h:2,a:1}});  // m1: 2-1  -> 2x 2-1
+  const res2={}; mids.slice(0,6).forEach(id=>res2[id]={h:1,a:0});      // first 6 games finish 1-0
+  S.cache['wc26:results']=JSON.stringify(res2);
+  S.setTab('picks'); S.render(); await settle(doc);
+  check('Crowd favourite shows on every revealed game', doc.querySelectorAll('.pk .crowd').length===MATCHES.length, doc.querySelectorAll('.pk .crowd').length+'/'+MATCHES.length);
+  const cf=doc.querySelector('.pk .crowd');
+  const cfScore=cf&&cf.querySelector('b')?cf.querySelector('b').textContent.replace(/–/g,'-'):'';
+  check('Crowd favourite = most-tipped score (1-0, 3 of 5)', cfScore==='1-0' && /3 of 5/.test(cf.textContent), cfScore+' / '+(cf?cf.textContent.replace(/\s+/g,' ').trim():'none'));
+  S.setTab('table'); S.render(); await settle(doc);
+  const fdot={};[...doc.querySelectorAll('.lb-card')].forEach(c=>{fdot[c.querySelector('.nm').firstChild.textContent.trim()]=[...c.querySelectorAll('.fd')].map(d=>d.className.replace('fd ',''));});
+  check('Form: all-exact player shows 6 green dots', JSON.stringify(fdot['Andy Mathews'])===JSON.stringify(['f3','f3','f3','f3','f3','f3']));
+  check('Form: mixed player dots match their scores', JSON.stringify(fdot['Sam Hodgson'])===JSON.stringify(['f1','f0','f0','f0','f0','f0']));
+  check('Form dots capped at 8', [...doc.querySelectorAll('.lb-card')].every(c=>c.querySelectorAll('.fd').length<=8));
+  win.Date.now=realNow;
+
   // ---- verdict ----
   const ok = failN===0;
   summary.className = ok?'pass':'fail';
