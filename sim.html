@@ -158,9 +158,9 @@ async function run(){
   check('All Picks lists all '+MATCHES.length+' games', doc.querySelectorAll('.pk').length===MATCHES.length, doc.querySelectorAll('.pk').length+' cards');
   check('No picks revealed before any matchday', doc.querySelectorAll('.pk .pv').length===0, doc.querySelectorAll('.pk .pv').length+' revealed');
   check('Every game shows "hidden until matchday"', doc.querySelectorAll('.pk .miss').length===MATCHES.length);
-  S.setPlayer(valid[0].name); S.setTab('predict'); S.render(); await settle(doc);
+  S.setDirty(false); S.setEdit(null); S.setPlayer(valid[0].name); S.setTab('predict'); S.render(); await settle(doc);
   check('No games locked in predict today', doc.querySelectorAll('.m.locked').length===0);
-  check('Save bar visible (games still open)', !doc.getElementById('savebar').classList.contains('hide'));
+  check('Save bar hidden until you make a change', doc.getElementById('savebar').classList.contains('hide'));
   S.setPlayer(null);
   S.setTab('table'); S.render(); await settle(doc);
   const board0=readBoard(doc);
@@ -233,7 +233,8 @@ async function run(){
   const openBtns=[...doc.querySelectorAll('.m:not(.locked) .stp button')];
   check('Open unpicked games show steppers', openBtns.length>0 && openBtns.every(b=>win.getComputedStyle(b).display!=='none'));
   check('Locked games have no steppers', doc.querySelectorAll('.m.locked .stp button').length===0, doc.querySelectorAll('.m.locked .stp button').length+' stepper btns');
-  check('Save bar visible while games remain open', !doc.getElementById('savebar').classList.contains('hide'));
+  S.setDirty(false); S.setEdit(null); S.render(); await settle(doc);
+  check('Save bar hidden when nothing to save', doc.getElementById('savebar').classList.contains('hide'));
   win.Date.now=realNow;
 
   // ---- picked games collapse to a read-only score + Edit button ----
@@ -241,14 +242,19 @@ async function run(){
   S.cache['wc26:results']='{}'; S.setResults({});   // no results yet for these open games
   S.setPlayer(valid[0].name);
   const some={}; MATCHES.slice(0,3).forEach(m=>some[m.id]={h:1,a:0});
-  S.setPicks(some); S.setTab('predict'); S.render(); await settle(doc);
+  S.setDirty(false); S.setEdit(null); S.setPicks(some); S.setTab('predict'); S.render(); await settle(doc);
   const first3=[...doc.querySelectorAll('.m')].slice(0,3);
   check('Picked games hide steppers, show Edit', first3.every(c=>!c.querySelector('.stp button') && !!c.querySelector('.editbtn')));
   check('Unpicked games still show steppers', !!doc.querySelector('.m[data-id="'+MATCHES[3].id+'"] .stp button'));
+  check('Save bar hidden once predictions are saved', doc.getElementById('savebar').classList.contains('hide'));
+  S.setDirty(true); S.render(); await settle(doc);
+  check('Save bar shows when there are unsaved changes', !doc.getElementById('savebar').classList.contains('hide'));
+  S.setDirty(false); S.setEdit(null); S.render(); await settle(doc);
   doc.querySelector('.m[data-id="'+MATCHES[0].id+'"] .editbtn').click(); await settle(doc);
   const reopened=doc.querySelector('.m[data-id="'+MATCHES[0].id+'"]');
   check('Edit re-opens the steppers', !!reopened.querySelector('.stp button') && !reopened.querySelector('.editbtn'));
-  S.setPicks({});
+  check('Save bar reappears when you click Edit', !doc.getElementById('savebar').classList.contains('hide'));
+  S.setPicks({}); S.setDirty(false); S.setEdit(null);
 
   // ---- post-tournament: everything locked ----
   group('Post-tournament (clock → 1 Jul 2026 — all locked)');

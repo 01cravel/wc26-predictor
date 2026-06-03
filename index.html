@@ -534,9 +534,14 @@ function enterPredict(){
 
 function groupsPresent(){return [...new Set(MATCHES.map(m=>m.grp))].sort();}
 
+function syncSavebar(){
+  // Show "Save" only when there's something to save (unsaved edits) or you're mid-edit; hide once saved.
+  const show = tab==="predict" && player && openMatches().length>0 && (dirty || editId!==null);
+  el("savebar").classList.toggle("hide", !show);
+}
 function renderPredict(){
   if(!player){goNames();return;}
-  el("savebar").classList.toggle("hide",openMatches().length===0);  // hide Save only when nothing is left to edit
+  syncSavebar();
   let h='<div class="filterbar" id="fbar"><button data-g="ALL" class="'+(groupFilter==="ALL"?"on":"")+'">All games</button>';
   groupsPresent().forEach(g=>h+='<button data-g="'+g+'" class="'+(groupFilter===g?"on":"")+'">Grp '+g+'</button>');
   h+='</div>';
@@ -632,6 +637,7 @@ function wireSteppers(){
             if(mr)mr.innerHTML='<span class="picked">✓ picked</span>';
           }
           dirty=true;
+          syncSavebar();                        // unsaved change → bring the Save bar back
           updateProgress();
         };
       });
@@ -877,7 +883,7 @@ if(new URLSearchParams(location.search).has("sim")){
     setTab:t=>{tab=t;}, getTab:()=>tab,
     setPlayer:p=>{player=p;}, setResults:r=>{results=r;},
     matchLocked, openCount:()=>openMatches().length,
-    setPicks:p=>{picks=p;}, getPicks:()=>picks, jumpToNext,
+    setPicks:p=>{picks=p;}, getPicks:()=>picks, jumpToNext, setDirty:d=>{dirty=d;}, setEdit:id=>{editId=id;},
     detach:()=>{ if(unsubKv){try{unsubKv();}catch(e){}} unsubKv=null; },   // isolate from the live DB
     clearCache:()=>{ for(const k in cache) delete cache[k]; }
   };
