@@ -143,6 +143,18 @@
     box-shadow:0 8px 24px rgba(0,224,106,.4);opacity:0;transition:.25s;pointer-events:none;font-size:14px}
   .saved-flash.show{opacity:1;top:96px}
 
+  /* modal pop-up */
+  .modal{position:fixed;inset:0;z-index:100;display:none;align-items:center;justify-content:center;padding:24px;
+    background:rgba(4,7,16,.72);backdrop-filter:blur(3px)}
+  .modal.show{display:flex}
+  .modal-card{background:var(--card);border:1px solid var(--line2);border-radius:20px;padding:26px 22px 22px;
+    max-width:380px;width:100%;text-align:center;box-shadow:0 24px 64px rgba(0,0,0,.55);animation:modalpop .22s ease}
+  .modal-card .ico{font-size:42px;line-height:1;margin-bottom:8px}
+  .modal-card h3{font-family:'Anton';font-size:22px;margin:0 0 9px;letter-spacing:.5px}
+  .modal-card p{color:var(--txt);font-size:14.5px;line-height:1.55;margin:0 0 18px}
+  .modal-card .btn{width:100%}
+  @keyframes modalpop{from{transform:scale(.92);opacity:0}to{transform:scale(1);opacity:1}}
+
   /* leaderboard */
   .lb-card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin-bottom:9px;
     display:flex;align-items:center;gap:12px}
@@ -200,6 +212,8 @@
 </div>
 
 <div class="saved-flash" id="flash">✓ Saved</div>
+
+<div class="modal" id="modal"><div class="modal-card" id="modalCard"></div></div>
 
 <nav>
   <button data-tab="predict" class="on"><span class="ic">⚽</span>Predict</button>
@@ -363,6 +377,23 @@ function scoreFor(pred,res){
 }
 function initials(n){return n.split(" ").map(w=>w[0]).slice(0,2).join("").toUpperCase();}
 function flash(t){const f=el("flash");f.textContent=t;f.classList.add("show");setTimeout(()=>f.classList.remove("show"),1500);}
+
+// Reusable centre-screen pop-up.
+function showModal({ico,title,body,btn,onClose}){
+  const m=el("modal");
+  el("modalCard").innerHTML=(ico?'<div class="ico">'+ico+'</div>':'')
+    +(title?'<h3>'+title+'</h3>':'')
+    +'<p>'+body+'</p><button class="btn" id="modalBtn">'+(btn||'OK')+'</button>';
+  m.classList.add("show");
+  const close=()=>{ m.classList.remove("show"); m.onclick=null; if(onClose)onClose(); };
+  el("modalBtn").onclick=close;
+  m.onclick=e=>{ if(e.target===m) close(); };   // tap backdrop to dismiss
+}
+// Show a one-time intro the first time a tab is opened on this device.
+function tabIntro(key,opts){
+  try{ if(localStorage.getItem(key)==="1") return; localStorage.setItem(key,"1"); }catch(e){}
+  showModal(opts);
+}
 function updateProgress(){
   const done=Object.keys(picks).length, total=MATCHES.length;
   const fill=el("progFill"), txt=el("progTxt");
@@ -588,8 +619,16 @@ async function saveMine(){
   const data=raw?safeParse(raw,{pin:null,picks:{}}):{pin:null,picks:{}};
   data.picks=picks;data.updated=Date.now();
   const ok=await sSet(slug(player),JSON.stringify(data));
-  if(ok){dirty=false;flash("✓ Predictions saved");}
-  else flash("⚠️ Couldn't save — check your connection and try again");
+  if(ok){
+    dirty=false;
+    showModal({
+      ico:'✅',
+      title:'Thanks!',
+      body:'Your predictions have been saved. You can edit these at any time up until the day before kickoff.',
+      btn:'View leaderboard →',
+      onClose:()=>{ tab="table"; groupFilter="ALL"; render(); }
+    });
+  } else flash("⚠️ Couldn't save — check your connection and try again");
 }
 
 /* ---------------- VIEW: leaderboard ---------------- */
@@ -782,7 +821,11 @@ function render(){
 }
 
 document.querySelectorAll("nav button").forEach(b=>{
-  b.onclick=()=>{tab=b.dataset.tab;groupFilter="ALL";render();};
+  b.onclick=()=>{
+    tab=b.dataset.tab;groupFilter="ALL";render();
+    if(tab==="picks") tabIntro("wc26:seenPicksIntro",{ico:'👀',title:'All Picks',body:"You'll be able to see who your friends have picked on the day of the game.",btn:'Got it'});
+    else if(tab==="results") tabIntro("wc26:seenResultsIntro",{ico:'📋',title:'Results',body:'The results will show here when they come in.',btn:'Got it'});
+  };
 });
 el("saveBtn").onclick=saveMine;
 el("nextBtn").onclick=()=>jumpToNext(false);
