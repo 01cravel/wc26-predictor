@@ -205,7 +205,7 @@
   <header>
     <div class="hd-row">
       <div class="badge">🏆</div>
-      <div class="ttl"><b>PREDICTOR '26</b><span>World Cup &middot; 20 Top Games</span></div>
+      <div class="ttl"><b>PREDICTOR '26</b><span>World Cup &middot; 10 Top Games</span></div>
       <div class="who" id="whoBox"></div>
     </div>
     <div class="deadline" id="deadline"></div>
@@ -216,7 +216,7 @@
 </div>
 
 <div class="savebar hide" id="savebar">
-  <div class="prog"><div class="prog-track"><div class="prog-fill" id="progFill"></div></div><span class="prog-txt" id="progTxt">0 / 20</span></div>
+  <div class="prog"><div class="prog-track"><div class="prog-fill" id="progFill"></div></div><span class="prog-txt" id="progTxt">0 / 10</span></div>
   <div class="inner">
     <button class="btn ghost" id="nextBtn" title="Jump to next unpicked game">Next ▸</button>
     <button class="btn" id="saveBtn">Save my predictions</button>
@@ -303,26 +303,16 @@ const F = { // flag emoji
  "Argentina":"🇦🇷","Algeria":"🇩🇿","Austria":"🇦🇹","Jordan":"🇯🇴","Portugal":"🇵🇹","DR Congo":"🇨🇩",
  "England":"🏴󠁧󠁢󠁥󠁮󠁧󠁿","Croatia":"🇭🇷","Ghana":"🇬🇭","Panama":"🇵🇦","Uzbekistan":"🇺🇿","Colombia":"🇨🇴"};
 
-// The 20 standout fixtures of the group stage (heavyweight clashes, rivalries, the England games).
+// The 10 standout fixtures of the group stage (the England & Scotland games + heavyweight clashes).
 // [id, group, dayLabel, ukTime, home, away]
 const RAW = [
- ["m1","A","Thu 11 Jun","8:00pm","Mexico","South Africa"],
  ["m6","C","Sat 13 Jun","11:00pm","Brazil","Morocco"],
- ["m10","F","Sun 14 Jun","9:00pm","Netherlands","Japan"],
- ["m14","G","Mon 15 Jun","8:00pm","Belgium","Egypt"],
  ["m17","I","Tue 16 Jun","8:00pm","France","Senegal"],
  ["m19","J","Wed 17 Jun","2:00am","Argentina","Algeria"],
- ["m21","K","Wed 17 Jun","6:00pm","Portugal","DR Congo"],
  ["m22","L","Wed 17 Jun","9:00pm","England","Croatia"],
- ["m33","F","Sat 20 Jun","6:00pm","Netherlands","Sweden"],
  ["m34","E","Sat 20 Jun","9:00pm","Germany","Ivory Coast"],
- ["m37","H","Sun 21 Jun","5:00pm","Spain","Saudi Arabia"],
- ["m38","G","Sun 21 Jun","8:00pm","Belgium","Iran"],
- ["m41","J","Mon 22 Jun","6:00pm","Argentina","Austria"],
  ["m46","L","Tue 23 Jun","9:00pm","England","Ghana"],
- ["m49","B","Wed 24 Jun","8:00pm","Switzerland","Canada"],
  ["m52","C","Wed 24 Jun","11:00pm","Scotland","Brazil"],
- ["m56","E","Thu 25 Jun","9:00pm","Ecuador","Germany"],
  ["m61","I","Fri 26 Jun","8:00pm","Norway","France"],
  ["m64","H","Sat 27 Jun","1:00am","Uruguay","Spain"],
  ["m69","K","Sun 28 Jun","12:30am","Colombia","Portugal"],
@@ -533,7 +523,7 @@ function readPin(){return [...el("pinrow").children].map(i=>i.value).join("");}
 function enterPredict(){
   tab="predict";editId=null;jumpPending=true;setNav();render();
   tabIntro("wc26:seenPredictIntro",{ico:'⚽',title:'Predict the scores',
-    body:"We've hand-picked the 20 standout games of the World Cup group stage. Set your predicted score for each one, then save your picks. Good luck!",
+    body:"We've hand-picked the 10 standout games of the World Cup group stage. Set your predicted score for each one, then save your picks. Good luck!",
     btn:"Let's go"});
 }
 
