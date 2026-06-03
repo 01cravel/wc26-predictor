@@ -328,6 +328,29 @@ async function run(){
   check('Form dots capped at 8', [...doc.querySelectorAll('.lb-card')].every(c=>c.querySelectorAll('.fd').length<=8));
   win.Date.now=realNow;
 
+  // ---- hardening: malicious / junk scores are sanitised (stored-XSS defence) ----
+  group('Hardening: scores sanitised on render');
+  win.Date.now=()=>Date.parse('2026-07-01T12:00:00Z');   // all games revealed
+  S.clearCache(); S.setResults({}); S.cache['wc26:results']='{}';
+  S.cache[slug('Andy Mathews')]=JSON.stringify({pin:'h',picks:{
+    [MATCHES[0].id]:{h:'<img src=x onerror=window.__pwned=1>',a:2},   // injection attempt
+    [MATCHES[1].id]:{h:99,a:-5}                                       // out of range
+  }});
+  win.__pwned=undefined;
+  S.setTab('picks'); S.render(); await settle(doc);
+  check('No element injected from a malicious score', doc.querySelectorAll('.pk img,.pk script').length===0 && !win.__pwned);
+  const inj=doc.querySelector('.pk .pv').textContent.split(/[^0-9]+/).filter(x=>x!=='').map(Number);
+  check('Injection score coerced to integers', inj.length===2 && inj.every(n=>Number.isInteger(n)&&n>=0&&n<=20), 'pv='+JSON.stringify(inj));
+  const oor=doc.querySelectorAll('.pk')[1].querySelector('.pv').textContent.split(/[^0-9]+/).filter(x=>x!=='').map(Number);
+  check('Out-of-range scores clamped to 0-20', JSON.stringify(oor)===JSON.stringify([20,0]), 'pv='+JSON.stringify(oor));
+  win.Date.now=realNow;
+
+  // ---- offline-at-load guard ----
+  group('Offline-at-load guard');
+  S.setStoreReady(false); await S.goNames(); await settle(doc);
+  check('Shows a retry screen when the server is unreachable', /reach the server/i.test(doc.getElementById('view').textContent) && !!doc.getElementById('retryBtn'));
+  S.setStoreReady(true);
+
   // ---- verdict ----
   const ok = failN===0;
   summary.className = ok?'pass':'fail';

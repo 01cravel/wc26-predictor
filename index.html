@@ -345,7 +345,11 @@ async function sList(prefix){return Object.keys(cache).filter(k=>k.startsWith(pr
 function hash(p){let h=0;for(const c of (p||"")){h=(h*31+c.charCodeAt(0))>>>0;}return "h"+h;}
 // Never let one bad/corrupt record throw — skip it and keep the app alive.
 function safeParse(raw,fb){if(raw==null)return fb;try{const v=JSON.parse(raw);return (v&&typeof v==="object")?v:fb;}catch(e){console.warn("Skipped a corrupt record:",e&&e.message);return fb;}}
-function safePicks(d){return (d&&d.picks&&typeof d.picks==="object")?d.picks:{};}
+// Coerce every score to a clamped integer (0-20). Defends against junk data AND
+// HTML/script injected into a score via the open database (stored-XSS protection).
+function clampScore(n){n=Math.floor(Number(n));return Number.isFinite(n)?Math.max(0,Math.min(20,n)):0;}
+function safeScores(obj){const out={};if(obj&&typeof obj==="object")for(const id in obj){const v=obj[id];if(v&&typeof v==="object")out[id]={h:clampScore(v.h),a:clampScore(v.a)};}return out;}
+function safePicks(d){return safeScores(d&&d.picks);}
 
 /* ---------------- DEVICE IDENTITY LOCK ----------------
    Once a PIN is set on this device, it stays bound to that one player.
@@ -439,7 +443,14 @@ function renderHeader(){
 }
 
 /* ---------------- VIEW: name picker ---------------- */
+function showConnError(){
+  setSavebarVisible(false);setNav();renderHeader();
+  view.innerHTML='<div class="panel"><h2>Can\'t reach the server</h2><p>Your predictions can\'t load or save right now. Check your internet connection and try again — your saved picks are safe.</p><button class="btn" id="retryBtn">Retry</button></div>';
+  el("retryBtn").onclick=()=>location.reload();
+}
 async function goNames(){
+  // Don't let a returning player into the setup flow on an empty cache — they could overwrite real picks.
+  if(CONFIGURED && !storeReady){ showConnError(); return; }
   player=null;picks={};dirty=false;editId=null;tab="predict";
   setSavebarVisible(false);
   setNav();renderHeader();
@@ -791,7 +802,7 @@ function resultsListHtml(editable){
 function wireResultsFilter(){
   const fb=el("fbar");if(fb)fb.querySelectorAll("button").forEach(b=>b.onclick=()=>{groupFilter=b.dataset.g;render();});
 }
-async function loadResults(){const raw=await sGet("wc26:results");results=raw?safeParse(raw,{}):{};}
+async function loadResults(){const raw=await sGet("wc26:results");results=safeScores(safeParse(raw,{}));}
 
 /* ---------------- VIEW: all picks (each game reveals once it locks) ---------------- */
 async function renderPicks(){
@@ -889,13 +900,14 @@ window.addEventListener("beforeunload",e=>{if(dirty){e.preventDefault();e.return
 })();
 
 /* ---------------- TEST HOOK (dev only) ----------------
-   Exposed ONLY when the page is opened with ?sim — used by sim.html to drive the
-   real app code against in-memory data. Adds nothing to the normal app. */
-if(new URLSearchParams(location.search).has("sim")){
+   Exposed ONLY on localhost with ?sim — used by sim.html to drive the real app
+   code against in-memory data. It is completely inert on the deployed site. */
+const _LOCALHOST=/^(localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0)$/.test(location.hostname);
+if(_LOCALHOST && new URLSearchParams(location.search).has("sim")){
   window.__sim={
-    cache, render, scoreFor, outcome, MATCHES, PLAYERS, slug,
+    cache, render, scoreFor, outcome, MATCHES, PLAYERS, slug, goNames,
     setTab:t=>{tab=t;}, getTab:()=>tab,
-    setPlayer:p=>{player=p;}, setResults:r=>{results=r;},
+    setPlayer:p=>{player=p;}, setResults:r=>{results=r;}, setStoreReady:v=>{storeReady=v;},
     matchLocked, openCount:()=>openMatches().length,
     setPicks:p=>{picks=p;}, getPicks:()=>picks, jumpToNext, setDirty:d=>{dirty=d;}, setEdit:id=>{editId=id;},
     detach:()=>{ if(unsubKv){try{unsubKv();}catch(e){}} unsubKv=null; },   // isolate from the live DB
