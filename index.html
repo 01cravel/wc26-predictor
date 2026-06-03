@@ -103,6 +103,13 @@
   .m:not(.set):not(.scored) .stp .val{color:var(--mut)}
   .picked{color:var(--green);font-weight:800;letter-spacing:.3px}
   .nopick{color:var(--mut);font-style:italic;font-size:13px;font-weight:600}
+  .editbtn{background:var(--card2);border:1px solid var(--line2);color:var(--cyan);font-family:'Archivo';
+    font-weight:800;font-size:11px;padding:5px 14px;border-radius:20px;cursor:pointer;letter-spacing:.3px}
+  .editbtn:active{transform:translateY(1px)}
+  .sval{font-family:'Anton';font-size:26px;width:46px;text-align:center;color:var(--green);
+    background:var(--ink2);border-radius:9px;padding:4px 0;border:1px solid var(--line2)}
+  .m.done{border-color:rgba(0,224,106,.4)}
+  .m.locked .sval,.m.scored .sval{color:var(--txt)}
   .pts{margin-top:9px;display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--mut)}
   .pts .pill{font-weight:800;padding:2px 9px;border-radius:20px;font-size:11px}
   .pill.p3{background:rgba(0,224,106,.16);color:var(--green)}
@@ -363,6 +370,7 @@ let dirty=false;          // unsaved prediction edits since last save
 let storeReady=false;     // true once Firestore is connected & syncing
 let unsubKv=null;         // Firestore listener unsubscribe (used by the sim harness)
 let jumpPending=false;    // scroll to next unpicked game on next predict render
+let editId=null;          // the one predict card currently expanded with +/- steppers
 
 const el=id=>document.getElementById(id);
 const view=el("view");
@@ -436,7 +444,7 @@ function renderHeader(){
 
 /* ---------------- VIEW: name picker ---------------- */
 async function goNames(){
-  player=null;picks={};dirty=false;tab="predict";
+  player=null;picks={};dirty=false;editId=null;tab="predict";
   el("savebar").classList.add("hide");
   setNav();renderHeader();
   // Device locked to one identity once a PIN has been set here — no switching to someone else.
@@ -517,7 +525,12 @@ function buildPinInputs(){
 function readPin(){return [...el("pinrow").children].map(i=>i.value).join("");}
 
 /* ---------------- VIEW: predict ---------------- */
-function enterPredict(){tab="predict";jumpPending=true;setNav();render();}
+function enterPredict(){
+  tab="predict";editId=null;jumpPending=true;setNav();render();
+  tabIntro("wc26:seenPredictIntro",{ico:'⚽',title:'Predict the scores',
+    body:"We've hand-picked the 20 standout games of the World Cup group stage. Set your predicted score for each one, then save your picks. Good luck!",
+    btn:"Let's go"});
+}
 
 function groupsPresent(){return [...new Set(MATCHES.map(m=>m.grp))].sort();}
 
@@ -539,6 +552,7 @@ function renderPredict(){
   view.innerHTML=h;
 
   el("fbar").querySelectorAll("button").forEach(b=>b.onclick=()=>{groupFilter=b.dataset.g;render();});
+  view.querySelectorAll(".editbtn").forEach(b=>b.onclick=()=>{editId=b.dataset.edit;renderPredict();});
   wireSteppers();   // only wires open (unlocked) cards
   updateProgress();
   if(jumpPending){jumpPending=false;jumpToNext(true);}
@@ -546,6 +560,7 @@ function renderPredict(){
 
 // Scroll to the first still-open game you haven't predicted yet.
 function jumpToNext(auto){
+  if(!auto && editId){ editId=null; renderPredict(); }   // moving on → collapse the card you just edited
   const next=MATCHES.find(m=>!matchLocked(m) && !picks[m.id]);
   if(!next){ if(!auto)flash("🎉 All open games predicted"); return; }
   if(groupFilter!=="ALL"){groupFilter="ALL";renderPredict();}
@@ -565,16 +580,25 @@ function matchCard(m,hv,av,locked,res,pred){
   }
   const isSet=!!pred;
   const editable=!locked && !res;
-  let metaRight=m.time+' UK';
-  if(!res){
-    if(locked) metaRight=isSet?'🔒 locked':'🔒 no pick';
-    else if(isSet) metaRight='<span class="picked">✓ picked</span>';
-  }
-  // Once a game can no longer be edited, an un-predicted game reads "no pick" rather than a phantom 0–0.
-  const scoreHtml = (!isSet && !editable)
-    ? '<div class="score"><span class="nopick">no pick</span></div>'
-    : '<div class="score">'+stepper("h",hv)+'<span class="vs">v</span>'+stepper("a",av)+'</div>';
-  return '<div class="m'+(locked?' locked':'')+(res?' scored':'')+(isSet?' set':'')+'" data-id="'+m.id+'">'
+  const editing=(editId===m.id);
+  const collapsed=isSet && editable && !editing;   // picked & not being edited → read-only score + Edit
+
+  let metaRight;
+  if(res) metaRight=m.time+' UK';
+  else if(locked) metaRight=isSet?'🔒 locked':'🔒 no pick';
+  else if(collapsed) metaRight='<button class="editbtn" data-edit="'+m.id+'">✎ Edit</button>';
+  else if(isSet) metaRight='<span class="picked">✓ picked</span>';
+  else metaRight=m.time+' UK';
+
+  let scoreHtml;
+  if(!isSet && !editable)                       // locked/over with no prediction
+    scoreHtml='<div class="score"><span class="nopick">no pick</span></div>';
+  else if(editable && (!isSet || editing))      // open & (unpicked or being edited) → steppers
+    scoreHtml='<div class="score">'+stepper("h",hv)+'<span class="vs">v</span>'+stepper("a",av)+'</div>';
+  else                                          // picked but read-only (collapsed / locked / scored)
+    scoreHtml='<div class="score">'+staticVal(hv)+'<span class="vs">v</span>'+staticVal(av)+'</div>';
+
+  return '<div class="m'+(locked?' locked':'')+(res?' scored':'')+(isSet?' set':'')+(collapsed?' done':'')+'" data-id="'+m.id+'">'
     +'<div class="meta"><span class="grp">GROUP '+m.grp+'</span><span>'+metaRight+'</span></div>'
     +'<div class="row">'
       +'<div class="team"><span class="fl">'+m.hf+'</span><span class="nm">'+m.h+'</span></div>'
@@ -582,6 +606,7 @@ function matchCard(m,hv,av,locked,res,pred){
       +'<div class="team away"><span class="fl">'+m.af+'</span><span class="nm">'+m.a+'</span></div>'
     +'</div>'+ptsHtml+'</div>';
 }
+function staticVal(v){return '<span class="sval">'+v+'</span>';}
 function stepper(side,val){
   return '<div class="stp" data-side="'+side+'">'
     +'<button data-d="1">+</button>'
@@ -600,6 +625,7 @@ function wireSteppers(){
           v=Math.max(0,Math.min(20,v));
           picks[id][side]=v;
           stp.querySelector(".val").textContent=v;
+          editId=id;                            // keep this card open while it's being dialed in
           if(!card.classList.contains("set")){
             card.classList.add("set");
             const mr=card.querySelector(".meta span:last-child");
@@ -822,7 +848,9 @@ function render(){
 
 document.querySelectorAll("nav button").forEach(b=>{
   b.onclick=()=>{
-    tab=b.dataset.tab;groupFilter="ALL";render();
+    tab=b.dataset.tab;groupFilter="ALL";
+    if(tab==="predict") editId=null;   // returning to predict shows a clean, collapsed list
+    render();
     if(tab==="picks") tabIntro("wc26:seenPicksIntro",{ico:'👀',title:'All Picks',body:"You'll be able to see who your friends have picked on the day of the game.",btn:'Got it'});
     else if(tab==="results") tabIntro("wc26:seenResultsIntro",{ico:'📋',title:'Results',body:'The results will show here when they come in.',btn:'Got it'});
   };

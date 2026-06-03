@@ -228,14 +228,27 @@ async function run(){
   S.setTab('picks'); S.render(); await settle(doc);
   const revealedCards=[...doc.querySelectorAll('.pk')].filter(pk=>pk.querySelector('.pv')).length;
   check('Only locked games reveal picks in All Picks', revealedCards===expLocked, revealedCards+' revealed');
-  S.setPlayer(valid[0].name); S.setPicks(valid[0].picks); S.setTab('predict'); S.render(); await settle(doc);
+  S.setPlayer(valid[0].name); S.setPicks({}); S.setTab('predict'); S.render(); await settle(doc);
   check('Predict locks exactly the locked games', doc.querySelectorAll('.m.locked').length===expLocked, doc.querySelectorAll('.m.locked').length+' locked cards');
   const openBtns=[...doc.querySelectorAll('.m:not(.locked) .stp button')];
-  check('Open games keep working steppers', openBtns.length>0 && openBtns.every(b=>win.getComputedStyle(b).display!=='none'));
-  const lockBtns=[...doc.querySelectorAll('.m.locked .stp button')];
-  check('Locked games hide their steppers', lockBtns.length>0 && lockBtns.every(b=>win.getComputedStyle(b).display==='none'));
+  check('Open unpicked games show steppers', openBtns.length>0 && openBtns.every(b=>win.getComputedStyle(b).display!=='none'));
+  check('Locked games have no steppers', doc.querySelectorAll('.m.locked .stp button').length===0, doc.querySelectorAll('.m.locked .stp button').length+' stepper btns');
   check('Save bar visible while games remain open', !doc.getElementById('savebar').classList.contains('hide'));
   win.Date.now=realNow;
+
+  // ---- picked games collapse to a read-only score + Edit button ----
+  group('Picked games collapse to an Edit button (open games)');
+  S.cache['wc26:results']='{}'; S.setResults({});   // no results yet for these open games
+  S.setPlayer(valid[0].name);
+  const some={}; MATCHES.slice(0,3).forEach(m=>some[m.id]={h:1,a:0});
+  S.setPicks(some); S.setTab('predict'); S.render(); await settle(doc);
+  const first3=[...doc.querySelectorAll('.m')].slice(0,3);
+  check('Picked games hide steppers, show Edit', first3.every(c=>!c.querySelector('.stp button') && !!c.querySelector('.editbtn')));
+  check('Unpicked games still show steppers', !!doc.querySelector('.m[data-id="'+MATCHES[3].id+'"] .stp button'));
+  doc.querySelector('.m[data-id="'+MATCHES[0].id+'"] .editbtn').click(); await settle(doc);
+  const reopened=doc.querySelector('.m[data-id="'+MATCHES[0].id+'"]');
+  check('Edit re-opens the steppers', !!reopened.querySelector('.stp button') && !reopened.querySelector('.editbtn'));
+  S.setPicks({});
 
   // ---- post-tournament: everything locked ----
   group('Post-tournament (clock → 1 Jul 2026 — all locked)');
@@ -252,9 +265,8 @@ async function run(){
   S.setPlayer(valid[5].name); S.setPicks(valid[5].picks); S.setTab('predict'); S.render(); await settle(doc);
   const cards=doc.querySelectorAll('.m').length;
   const lockedCards=doc.querySelectorAll('.m.locked').length;
-  const btns=[...doc.querySelectorAll('.m .stp button')];
-  const allHidden=btns.length>0 && btns.every(b=>win.getComputedStyle(b).display==='none');
-  check('Predict fully locks (no steppers) when all done', cards>0 && lockedCards===cards && allHidden, lockedCards+'/'+cards+' cards locked');
+  const stepBtns=doc.querySelectorAll('.m .stp button').length;
+  check('Predict fully locked — no steppers anywhere', cards>0 && lockedCards===cards && stepBtns===0, lockedCards+'/'+cards+' locked, '+stepBtns+' stepper btns');
   check('Save bar hidden when nothing left to edit', doc.getElementById('savebar').classList.contains('hide'));
   // a partial player (40/72) should show "no pick" on the games they never predicted
   S.setPlayer(valid[1].name); S.setPicks(valid[1].picks); S.setTab('predict'); S.render(); await settle(doc);
