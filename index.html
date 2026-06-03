@@ -25,6 +25,7 @@
     min-height:100vh; -webkit-text-size-adjust:100%;
   }
   .wrap{max-width:560px;margin:0 auto;padding:0 14px 120px}
+  body.saving .wrap{padding-bottom:185px}   /* clear the fixed Save bar so it never covers the last card */
   .anton{font-family:'Anton',sans-serif;font-weight:400;letter-spacing:.5px}
 
   /* header */
@@ -440,7 +441,7 @@ function renderHeader(){
 /* ---------------- VIEW: name picker ---------------- */
 async function goNames(){
   player=null;picks={};dirty=false;editId=null;tab="predict";
-  el("savebar").classList.add("hide");
+  setSavebarVisible(false);
   setNav();renderHeader();
   // Device locked to one identity once a PIN has been set here — no switching to someone else.
   const me=getMe();
@@ -529,10 +530,14 @@ function enterPredict(){
 
 function groupsPresent(){return [...new Set(MATCHES.map(m=>m.grp))].sort();}
 
+function setSavebarVisible(show){
+  el("savebar").classList.toggle("hide", !show);
+  document.body.classList.toggle("saving", show);   // adds extra bottom padding so the bar can't cover the last card
+}
 function syncSavebar(){
   // Show "Save" only when there's something to save (unsaved edits) or you're mid-edit; hide once saved.
   const show = tab==="predict" && player && openMatches().length>0 && (dirty || editId!==null);
-  el("savebar").classList.toggle("hide", !show);
+  setSavebarVisible(show);
 }
 function renderPredict(){
   if(!player){goNames();return;}
@@ -660,7 +665,7 @@ async function saveMine(){
 
 /* ---------------- VIEW: leaderboard ---------------- */
 async function renderTable(){
-  el("savebar").classList.add("hide");
+  setSavebarVisible(false);
   view.innerHTML='<div class="empty">Loading standings…</div>';
   await loadResults();
   const keys=await sList("wc26:pred:");
@@ -709,7 +714,7 @@ async function renderTable(){
 
 /* ---------------- VIEW: results entry (admin-locked) ---------------- */
 async function renderResults(){
-  el("savebar").classList.add("hide");
+  setSavebarVisible(false);
   await loadResults();
   const adminRaw=await sGet(slug(ADMIN));
   const adminRec=adminRaw?safeParse(adminRaw,null):null;
@@ -790,7 +795,7 @@ async function loadResults(){const raw=await sGet("wc26:results");results=raw?sa
 
 /* ---------------- VIEW: all picks (each game reveals once it locks) ---------------- */
 async function renderPicks(){
-  el("savebar").classList.add("hide");
+  setSavebarVisible(false);
   view.innerHTML='<div class="empty">Loading everyone\'s picks…</div>';
   await loadResults();
   const all=await loadAllPicks(); // [{n, picks}]
