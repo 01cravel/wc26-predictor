@@ -98,6 +98,11 @@
   .vs{font-size:11px;color:var(--mut);font-weight:800}
   .m.locked .stp button{display:none}
   .m.scored{border-color:var(--line2)}
+  .m.set{border-color:rgba(0,224,106,.4)}
+  .m.set .stp .val{color:var(--green)}
+  .m:not(.set):not(.scored) .stp .val{color:var(--mut)}
+  .picked{color:var(--green);font-weight:800;letter-spacing:.3px}
+  .nopick{color:var(--mut);font-style:italic;font-size:13px;font-weight:600}
   .pts{margin-top:9px;display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--mut)}
   .pts .pill{font-weight:800;padding:2px 9px;border-radius:20px;font-size:11px}
   .pill.p3{background:rgba(0,224,106,.16);color:var(--green)}
@@ -110,6 +115,10 @@
     padding:10px 14px;max-width:560px;margin:0 auto;
     background:linear-gradient(transparent,var(--ink) 35%)}
   .savebar .inner{display:flex;gap:10px;align-items:center}
+  .savebar #nextBtn{flex:none;width:auto;padding-left:18px;padding-right:18px}
+  .savebar #saveBtn{flex:1}
+  .m.flashcard{animation:flashcard 1.2s ease}
+  @keyframes flashcard{0%,100%{box-shadow:none}45%{border-color:var(--cyan);box-shadow:0 0 0 2px rgba(25,224,255,.45)}}
   .prog{display:flex;align-items:center;gap:10px;margin-bottom:9px;padding:0 2px}
   .prog-track{flex:1;height:8px;border-radius:20px;background:var(--card2);border:1px solid var(--line);overflow:hidden}
   .prog-fill{height:100%;width:0;border-radius:20px;background:linear-gradient(90deg,var(--cyan),var(--green));transition:width .25s}
@@ -172,7 +181,7 @@
   <header>
     <div class="hd-row">
       <div class="badge">🏆</div>
-      <div class="ttl"><b>PREDICTOR '26</b><span>World Cup &middot; Group Stage</span></div>
+      <div class="ttl"><b>PREDICTOR '26</b><span>World Cup &middot; 20 Top Games</span></div>
       <div class="who" id="whoBox"></div>
     </div>
     <div class="deadline" id="deadline"></div>
@@ -183,8 +192,9 @@
 </div>
 
 <div class="savebar hide" id="savebar">
-  <div class="prog"><div class="prog-track"><div class="prog-fill" id="progFill"></div></div><span class="prog-txt" id="progTxt">0 / 72</span></div>
+  <div class="prog"><div class="prog-track"><div class="prog-fill" id="progFill"></div></div><span class="prog-txt" id="progTxt">0 / 20</span></div>
   <div class="inner">
+    <button class="btn ghost" id="nextBtn" title="Jump to next unpicked game">Next ▸</button>
     <button class="btn" id="saveBtn">Save my predictions</button>
   </div>
 </div>
@@ -243,14 +253,15 @@ async function initStore(){
     db=getFirestore(app);
     await new Promise((res)=>{
       let first=true;
-      onSnapshot(collection(db,"kv"), s=>{
+      unsubKv=onSnapshot(collection(db,"kv"), s=>{
+        storeReady=true;
         for(const k in cache) delete cache[k];
         s.forEach(d=>{const x=d.data(); if(x&&x.k!==undefined) cache[x.k]=x.v;});
         if(first){first=false;res();}
         else if(tab==="table"||tab==="picks") render();   // live refresh on others' saves
       }, err=>{console.error("Firestore:",err); if(first){first=false;res();}});
     });
-    return true;
+    return storeReady;
   }catch(e){console.error(e);return false;}
 }
 /* ---------------- DATA ---------------- */
@@ -266,96 +277,65 @@ const F = { // flag emoji
  "Argentina":"🇦🇷","Algeria":"🇩🇿","Austria":"🇦🇹","Jordan":"🇯🇴","Portugal":"🇵🇹","DR Congo":"🇨🇩",
  "England":"🏴󠁧󠁢󠁥󠁮󠁧󠁿","Croatia":"🇭🇷","Ghana":"🇬🇭","Panama":"🇵🇦","Uzbekistan":"🇺🇿","Colombia":"🇨🇴"};
 
+// The 20 standout fixtures of the group stage (heavyweight clashes, rivalries, the England games).
 // [id, group, dayLabel, ukTime, home, away]
 const RAW = [
  ["m1","A","Thu 11 Jun","8:00pm","Mexico","South Africa"],
- ["m2","A","Fri 12 Jun","3:00am","South Korea","Czech Republic"],
- ["m3","B","Fri 12 Jun","8:00pm","Canada","Bosnia & Herz."],
- ["m4","D","Sat 13 Jun","2:00am","USA","Paraguay"],
- ["m5","B","Sat 13 Jun","8:00pm","Qatar","Switzerland"],
  ["m6","C","Sat 13 Jun","11:00pm","Brazil","Morocco"],
- ["m7","C","Sun 14 Jun","2:00am","Haiti","Scotland"],
- ["m8","D","Sun 14 Jun","5:00am","Australia","Turkey"],
- ["m9","E","Sun 14 Jun","6:00pm","Germany","Curacao"],
  ["m10","F","Sun 14 Jun","9:00pm","Netherlands","Japan"],
- ["m11","E","Mon 15 Jun","12:00am","Ivory Coast","Ecuador"],
- ["m12","F","Mon 15 Jun","3:00am","Sweden","Tunisia"],
- ["m13","H","Mon 15 Jun","5:00pm","Spain","Cape Verde"],
  ["m14","G","Mon 15 Jun","8:00pm","Belgium","Egypt"],
- ["m15","H","Mon 15 Jun","11:00pm","Saudi Arabia","Uruguay"],
- ["m16","G","Tue 16 Jun","2:00am","Iran","New Zealand"],
  ["m17","I","Tue 16 Jun","8:00pm","France","Senegal"],
- ["m18","I","Tue 16 Jun","11:00pm","Iraq","Norway"],
  ["m19","J","Wed 17 Jun","2:00am","Argentina","Algeria"],
- ["m20","J","Wed 17 Jun","5:00am","Austria","Jordan"],
  ["m21","K","Wed 17 Jun","6:00pm","Portugal","DR Congo"],
  ["m22","L","Wed 17 Jun","9:00pm","England","Croatia"],
- ["m23","L","Thu 18 Jun","12:00am","Ghana","Panama"],
- ["m24","K","Thu 18 Jun","3:00am","Uzbekistan","Colombia"],
- ["m25","A","Thu 18 Jun","5:00pm","Czech Republic","South Africa"],
- ["m26","B","Thu 18 Jun","8:00pm","Switzerland","Bosnia & Herz."],
- ["m27","B","Thu 18 Jun","11:00pm","Canada","Qatar"],
- ["m28","A","Fri 19 Jun","2:00am","Mexico","South Korea"],
- ["m29","D","Fri 19 Jun","8:00pm","USA","Australia"],
- ["m30","C","Fri 19 Jun","11:00pm","Scotland","Morocco"],
- ["m31","C","Sat 20 Jun","1:30am","Brazil","Haiti"],
- ["m32","D","Sat 20 Jun","4:00am","Turkey","Paraguay"],
  ["m33","F","Sat 20 Jun","6:00pm","Netherlands","Sweden"],
  ["m34","E","Sat 20 Jun","9:00pm","Germany","Ivory Coast"],
- ["m35","E","Sun 21 Jun","1:00am","Ecuador","Curacao"],
- ["m36","F","Sun 21 Jun","5:00am","Tunisia","Japan"],
  ["m37","H","Sun 21 Jun","5:00pm","Spain","Saudi Arabia"],
  ["m38","G","Sun 21 Jun","8:00pm","Belgium","Iran"],
- ["m39","H","Sun 21 Jun","11:00pm","Uruguay","Cape Verde"],
- ["m40","G","Mon 22 Jun","2:00am","New Zealand","Egypt"],
  ["m41","J","Mon 22 Jun","6:00pm","Argentina","Austria"],
- ["m42","I","Mon 22 Jun","10:00pm","France","Iraq"],
- ["m43","I","Tue 23 Jun","1:00am","Norway","Senegal"],
- ["m44","J","Tue 23 Jun","4:00am","Jordan","Algeria"],
- ["m45","K","Tue 23 Jun","6:00pm","Portugal","Uzbekistan"],
  ["m46","L","Tue 23 Jun","9:00pm","England","Ghana"],
- ["m47","L","Wed 24 Jun","12:00am","Panama","Croatia"],
- ["m48","K","Wed 24 Jun","3:00am","Colombia","DR Congo"],
  ["m49","B","Wed 24 Jun","8:00pm","Switzerland","Canada"],
- ["m50","B","Wed 24 Jun","8:00pm","Bosnia & Herz.","Qatar"],
- ["m51","C","Wed 24 Jun","11:00pm","Morocco","Haiti"],
  ["m52","C","Wed 24 Jun","11:00pm","Scotland","Brazil"],
- ["m53","A","Thu 25 Jun","2:00am","South Africa","South Korea"],
- ["m54","A","Thu 25 Jun","2:00am","Czech Republic","Mexico"],
- ["m55","E","Thu 25 Jun","9:00pm","Curacao","Ivory Coast"],
  ["m56","E","Thu 25 Jun","9:00pm","Ecuador","Germany"],
- ["m57","F","Fri 26 Jun","12:00am","Tunisia","Netherlands"],
- ["m58","F","Fri 26 Jun","12:00am","Japan","Sweden"],
- ["m59","D","Fri 26 Jun","3:00am","Turkey","USA"],
- ["m60","D","Fri 26 Jun","3:00am","Paraguay","Australia"],
  ["m61","I","Fri 26 Jun","8:00pm","Norway","France"],
- ["m62","I","Fri 26 Jun","8:00pm","Senegal","Iraq"],
- ["m63","H","Sat 27 Jun","1:00am","Cape Verde","Saudi Arabia"],
  ["m64","H","Sat 27 Jun","1:00am","Uruguay","Spain"],
- ["m65","G","Sat 27 Jun","4:00am","New Zealand","Belgium"],
- ["m66","G","Sat 27 Jun","4:00am","Egypt","Iran"],
- ["m67","L","Sat 27 Jun","10:00pm","Panama","England"],
- ["m68","L","Sat 27 Jun","10:00pm","Croatia","Ghana"],
  ["m69","K","Sun 28 Jun","12:30am","Colombia","Portugal"],
- ["m70","K","Sun 28 Jun","12:30am","DR Congo","Uzbekistan"],
- ["m71","J","Sun 28 Jun","3:00am","Algeria","Austria"],
- ["m72","J","Sun 28 Jun","3:00am","Jordan","Argentina"],
 ];
-const MATCHES = RAW.map(r=>({id:r[0],grp:r[1],day:r[2],time:r[3],h:r[4],a:r[5],hf:F[r[4]]||"🏳️",af:F[r[5]]||"🏳️"}));
+// Each pick stays editable until the START of its own matchday (UK), then locks.
+const MONTHS={Jan:"01",Feb:"02",Mar:"03",Apr:"04",May:"05",Jun:"06",Jul:"07",Aug:"08",Sep:"09",Oct:"10",Nov:"11",Dec:"12"};
+function dayLockTs(dayLabel){
+  const p=dayLabel.trim().split(/\s+/);           // e.g. ["Thu","11","Jun"]
+  const dd=String(parseInt(p[1],10)).padStart(2,"0");
+  return new Date("2026-"+MONTHS[p[2]]+"-"+dd+"T00:00:00+01:00").getTime();  // midnight UK (BST) of matchday
+}
+const MATCHES = RAW.map(r=>({id:r[0],grp:r[1],day:r[2],time:r[3],h:r[4],a:r[5],hf:F[r[4]]||"🏳️",af:F[r[5]]||"🏳️",lockTs:dayLockTs(r[2])}));
 
-// edit allowed up to end of 10 June 2026 (UK)
-const LOCK = new Date("2026-06-10T23:59:59+01:00").getTime();
-const isLocked = ()=> Date.now() > LOCK;
+// per-match locking — a pick locks once its matchday has begun
+const matchLocked = m => Date.now() >= m.lockTs;
+const openMatches = () => MATCHES.filter(m=>!matchLocked(m));
+const nextLockTs  = () => MATCHES.reduce((a,m)=> (!matchLocked(m) && m.lockTs<a) ? m.lockTs : a, Infinity);
 
 /* ---------------- STORAGE (Firestore-backed, live cache) ---------------- */
 function slug(n){return "wc26:pred:"+n.replace(/[^a-z0-9]/gi,"").toLowerCase();}
 async function sGet(k){return cache[k]!==undefined?cache[k]:null;}
 async function sSet(k,v){
   cache[k]=v;                                  // optimistic local update
-  if(db){try{await setDoc(doc(db,"kv",safeKey(k)),{k,v});}catch(e){console.error(e);}}
+  if(!db) return false;                        // no backend → not persisted to cloud
+  try{await setDoc(doc(db,"kv",safeKey(k)),{k,v});return true;}
+  catch(e){console.error(e);return false;}
 }
 async function sList(prefix){return Object.keys(cache).filter(k=>k.startsWith(prefix));}
 function hash(p){let h=0;for(const c of (p||"")){h=(h*31+c.charCodeAt(0))>>>0;}return "h"+h;}
+// Never let one bad/corrupt record throw — skip it and keep the app alive.
+function safeParse(raw,fb){if(raw==null)return fb;try{const v=JSON.parse(raw);return (v&&typeof v==="object")?v:fb;}catch(e){console.warn("Skipped a corrupt record:",e&&e.message);return fb;}}
+function safePicks(d){return (d&&d.picks&&typeof d.picks==="object")?d.picks:{};}
+
+/* ---------------- DEVICE IDENTITY LOCK ----------------
+   Once a PIN is set on this device, it stays bound to that one player.
+   You can never switch to a different name and pretend to be someone else. */
+const DEVICE_KEY="wc26:me";
+function getMe(){try{const n=localStorage.getItem(DEVICE_KEY);return (n&&PLAYERS.includes(n))?n:null;}catch(e){return null;}}
+function setMe(n){try{localStorage.setItem(DEVICE_KEY,n);}catch(e){}}
 
 /* ---------------- STATE ---------------- */
 const ADMIN="Luke Craven";   // only this player's PIN can edit results
@@ -365,6 +345,10 @@ let player=null;          // current player name
 let picks={};             // {matchId:{h,a}}
 let results={};           // {matchId:{h,a}}
 let groupFilter="ALL";
+let dirty=false;          // unsaved prediction edits since last save
+let storeReady=false;     // true once Firestore is connected & syncing
+let unsubKv=null;         // Firestore listener unsubscribe (used by the sim harness)
+let jumpPending=false;    // scroll to next unpicked game on next predict render
 
 const el=id=>document.getElementById(id);
 const view=el("view");
@@ -387,30 +371,53 @@ function updateProgress(){
 }
 
 /* ---------------- RENDER: header bits ---------------- */
+function nextLockLabel(){
+  const m=openMatches().sort((a,b)=>a.lockTs-b.lockTs)[0];
+  return m?m.day.replace(/^\w+\s/,""):"";   // "Thu 11 Jun" -> "11 Jun"
+}
 function renderHeader(){
   const dl=el("deadline");
-  const locked=isLocked();
-  dl.className="deadline"+(locked?" locked":"");
-  if(locked){
-    dl.innerHTML='<span class="dot"></span><span>Predictions <b>LOCKED</b> — deadline was 10 June. View only.</span>';
+  const open=openMatches().length, total=MATCHES.length;
+  if(open===0){
+    dl.className="deadline locked";
+    dl.innerHTML='<span class="dot"></span><span>All predictions <b>LOCKED</b> — view only.</span>';
+  }else if(open===total){
+    dl.className="deadline";
+    dl.innerHTML='<span class="dot"></span><span>Each pick locks on <b>its matchday</b> · first games lock <b>'+nextLockLabel()+'</b></span>';
   }else{
-    const d=Math.ceil((LOCK-Date.now())/86400000);
-    dl.innerHTML='<span class="dot"></span><span>Edit your picks until <b>10 June</b> · '+d+' day'+(d===1?'':'s')+' left</span>';
+    dl.className="deadline";
+    dl.innerHTML='<span class="dot"></span><span><b>'+(total-open)+'</b> locked · <b>'+open+'</b> open — next lock <b>'+nextLockLabel()+'</b></span>';
   }
   const wb=el("whoBox");
   if(player){
-    wb.innerHTML='Playing as<b>'+player+'</b><u id="chg">change</u>';
-    el("chg").onclick=goNames;
+    wb.innerHTML='Playing as<b>'+player+'</b><u id="chg">🔒 lock</u>';
+    el("chg").onclick=goNames;   // identity-locked: only ever re-prompts your own PIN
   }else wb.innerHTML='';
-  el("syncwarn").style.display=CONFIGURED?"none":"block";
+  const warn=el("syncwarn");
+  if(!CONFIGURED){
+    warn.textContent="⚠️ Backend not connected yet — nothing will save. Paste your Firebase config into the top of this file's code (setup steps are in the comment there).";
+    warn.style.display="block";
+  }else if(!storeReady){
+    warn.textContent="⚠️ Can't reach the server right now — predictions won't be saved until the connection is back.";
+    warn.style.display="block";
+  }else warn.style.display="none";
 }
 
 /* ---------------- VIEW: name picker ---------------- */
 async function goNames(){
-  player=null;picks={};tab="predict";
+  player=null;picks={};dirty=false;tab="predict";
   el("savebar").classList.add("hide");
   setNav();renderHeader();
-  view.innerHTML='<div class="panel"><h2>Who are you?</h2><p>Pick your name, set a 4-digit PIN, then make your predictions. Your PIN stops anyone else editing your picks.</p><div class="names" id="names"></div></div>';
+  // Device locked to one identity once a PIN has been set here — no switching to someone else.
+  const me=getMe();
+  if(me){
+    const raw=await sGet(slug(me));
+    const data=raw?safeParse(raw,null):null;
+    if(data && data.pin){ promptPin(me,data,true); }
+    else { setupPin(me,true); }   // edge: bound name but record gone → re-set PIN, stays locked
+    return;
+  }
+  view.innerHTML='<div class="panel"><h2>Who are you?</h2><p>Pick your name, set a 4-digit PIN, then make your predictions. Your PIN stops anyone else editing your picks — and this device stays signed in as you.</p><div class="names" id="names"></div></div>';
   const done = await whoHasSaved();
   const box=el("names");
   PLAYERS.forEach(n=>{
@@ -430,37 +437,38 @@ async function whoHasSaved(){
 
 async function pickName(n){
   const raw=await sGet(slug(n));
-  const data=raw?JSON.parse(raw):null;
+  const data=raw?safeParse(raw,null):null;
   if(data && data.pin){ promptPin(n,data); }
   else { setupPin(n); }
 }
 
-function promptPin(n,data){
+function promptPin(n,data,locked){
   view.innerHTML='<div class="panel"><h2>Hi '+n.split(" ")[0]+' 👋</h2><p>Enter your 4-digit PIN to edit your predictions.</p>'
     +'<div class="pinrow" id="pinrow"></div><div class="err" id="pinerr"></div>'
     +'<button class="btn" id="pinok">Unlock</button>'
-    +'<button class="btn ghost" id="pinback" style="margin-top:9px">Back</button></div>';
+    +(locked?'':'<button class="btn ghost" id="pinback" style="margin-top:9px">Back</button>')+'</div>';
   buildPinInputs();
-  el("pinback").onclick=goNames;
+  if(!locked)el("pinback").onclick=goNames;
   el("pinok").onclick=()=>{
     const p=readPin();
     if(p.length<4){el("pinerr").textContent="Enter all 4 digits";return;}
     if(hash(p)!==data.pin){el("pinerr").textContent="Wrong PIN, try again";return;}
-    player=n;picks=data.picks||{};enterPredict();
+    setMe(n);player=n;picks=safePicks(data);dirty=false;enterPredict();
   };
 }
-function setupPin(n){
-  view.innerHTML='<div class="panel"><h2>Welcome, '+n.split(" ")[0]+'!</h2><p>Choose a 4-digit PIN. You\'ll need it to edit your picks later, so keep it safe.</p>'
+function setupPin(n,locked){
+  view.innerHTML='<div class="panel"><h2>Welcome, '+n.split(" ")[0]+'!</h2><p>Choose a 4-digit PIN. You\'ll need it to edit your picks later, so keep it safe. This device will stay signed in as you.</p>'
     +'<div class="pinrow" id="pinrow"></div><div class="err" id="pinerr"></div>'
     +'<button class="btn gold" id="pinok">Set PIN & start predicting</button>'
-    +'<button class="btn ghost" id="pinback" style="margin-top:9px">Back</button></div>';
+    +(locked?'':'<button class="btn ghost" id="pinback" style="margin-top:9px">Back</button>')+'</div>';
   buildPinInputs();
-  el("pinback").onclick=goNames;
+  if(!locked)el("pinback").onclick=goNames;
   el("pinok").onclick=async()=>{
     const p=readPin();
     if(p.length<4){el("pinerr").textContent="Pick a 4-digit PIN";return;}
-    player=n;picks={};
-    await sSet(slug(n),JSON.stringify({pin:hash(p),picks:{},updated:Date.now()}));
+    setMe(n);player=n;picks={};dirty=false;
+    const ok=await sSet(slug(n),JSON.stringify({pin:hash(p),picks:{},updated:Date.now()}));
+    if(!ok)flash("⚠️ Saved on this device only — check your connection");
     enterPredict();
   };
 }
@@ -478,14 +486,13 @@ function buildPinInputs(){
 function readPin(){return [...el("pinrow").children].map(i=>i.value).join("");}
 
 /* ---------------- VIEW: predict ---------------- */
-function enterPredict(){tab="predict";setNav();render();}
+function enterPredict(){tab="predict";jumpPending=true;setNav();render();}
 
 function groupsPresent(){return [...new Set(MATCHES.map(m=>m.grp))].sort();}
 
 function renderPredict(){
   if(!player){goNames();return;}
-  const locked=isLocked();
-  el("savebar").classList.toggle("hide",locked);
+  el("savebar").classList.toggle("hide",openMatches().length===0);  // hide Save only when nothing is left to edit
   let h='<div class="filterbar" id="fbar"><button data-g="ALL" class="'+(groupFilter==="ALL"?"on":"")+'">All games</button>';
   groupsPresent().forEach(g=>h+='<button data-g="'+g+'" class="'+(groupFilter===g?"on":"")+'">Grp '+g+'</button>');
   h+='</div>';
@@ -496,13 +503,26 @@ function renderPredict(){
     if(m.day!==lastDay){h+='<div class="day">'+m.day+'</div>';lastDay=m.day;}
     const p=picks[m.id];const r=results[m.id];
     const hv=p?p.h:0, av=p?p.a:0;
-    h+=matchCard(m,hv,av,locked,r,p);
+    h+=matchCard(m,hv,av,matchLocked(m),r,p);
   });
   view.innerHTML=h;
 
   el("fbar").querySelectorAll("button").forEach(b=>b.onclick=()=>{groupFilter=b.dataset.g;render();});
-  if(!locked) wireSteppers();
+  wireSteppers();   // only wires open (unlocked) cards
   updateProgress();
+  if(jumpPending){jumpPending=false;jumpToNext(true);}
+}
+
+// Scroll to the first still-open game you haven't predicted yet.
+function jumpToNext(auto){
+  const next=MATCHES.find(m=>!matchLocked(m) && !picks[m.id]);
+  if(!next){ if(!auto)flash("🎉 All open games predicted"); return; }
+  if(groupFilter!=="ALL"){groupFilter="ALL";renderPredict();}
+  const card=view.querySelector('.m[data-id="'+next.id+'"]');
+  if(card){
+    card.scrollIntoView({behavior:auto?"auto":"smooth",block:"center"});
+    card.classList.add("flashcard");setTimeout(()=>card.classList.remove("flashcard"),1200);
+  }
 }
 
 function matchCard(m,hv,av,locked,res,pred){
@@ -512,11 +532,22 @@ function matchCard(m,hv,av,locked,res,pred){
     const pill = s===3?'<span class="pill p3">+3 exact</span>':s===1?'<span class="pill p1">+1 result</span>':s===0?'<span class="pill p0">0 pts</span>':'';
     ptsHtml='<div class="pts"><span class="pill res">FT '+res.h+'–'+res.a+'</span>'+(pred?pill:'<span class="muted">no pick</span>')+'</div>';
   }
-  return '<div class="m'+(locked?' locked':'')+(res?' scored':'')+'" data-id="'+m.id+'">'
-    +'<div class="meta"><span class="grp">GROUP '+m.grp+'</span><span>'+m.time+' UK</span></div>'
+  const isSet=!!pred;
+  const editable=!locked && !res;
+  let metaRight=m.time+' UK';
+  if(!res){
+    if(locked) metaRight=isSet?'🔒 locked':'🔒 no pick';
+    else if(isSet) metaRight='<span class="picked">✓ picked</span>';
+  }
+  // Once a game can no longer be edited, an un-predicted game reads "no pick" rather than a phantom 0–0.
+  const scoreHtml = (!isSet && !editable)
+    ? '<div class="score"><span class="nopick">no pick</span></div>'
+    : '<div class="score">'+stepper("h",hv)+'<span class="vs">v</span>'+stepper("a",av)+'</div>';
+  return '<div class="m'+(locked?' locked':'')+(res?' scored':'')+(isSet?' set':'')+'" data-id="'+m.id+'">'
+    +'<div class="meta"><span class="grp">GROUP '+m.grp+'</span><span>'+metaRight+'</span></div>'
     +'<div class="row">'
       +'<div class="team"><span class="fl">'+m.hf+'</span><span class="nm">'+m.h+'</span></div>'
-      +'<div class="score">'+stepper("h",hv)+'<span class="vs">v</span>'+stepper("a",av)+'</div>'
+      +scoreHtml
       +'<div class="team away"><span class="fl">'+m.af+'</span><span class="nm">'+m.a+'</span></div>'
     +'</div>'+ptsHtml+'</div>';
 }
@@ -527,17 +558,23 @@ function stepper(side,val){
     +'<button data-d="-1">−</button></div>';
 }
 function wireSteppers(){
-  view.querySelectorAll(".m").forEach(card=>{
+  view.querySelectorAll(".m:not(.locked)").forEach(card=>{
     const id=card.dataset.id;
     card.querySelectorAll(".stp").forEach(stp=>{
       const side=stp.dataset.side;
       stp.querySelectorAll("button").forEach(btn=>{
         btn.onclick=()=>{
-          if(!picks[id])picks[id]={h:0,a:0};
+          if(!picks[id])picks[id]={h:0,a:0};   // any tap registers the pick — even a deliberate 0-0
           let v=picks[id][side]+(+btn.dataset.d);
           v=Math.max(0,Math.min(20,v));
           picks[id][side]=v;
           stp.querySelector(".val").textContent=v;
+          if(!card.classList.contains("set")){
+            card.classList.add("set");
+            const mr=card.querySelector(".meta span:last-child");
+            if(mr)mr.innerHTML='<span class="picked">✓ picked</span>';
+          }
+          dirty=true;
           updateProgress();
         };
       });
@@ -548,10 +585,11 @@ function wireSteppers(){
 async function saveMine(){
   if(!player)return;
   const raw=await sGet(slug(player));
-  const data=raw?JSON.parse(raw):{pin:null,picks:{}};
+  const data=raw?safeParse(raw,{pin:null,picks:{}}):{pin:null,picks:{}};
   data.picks=picks;data.updated=Date.now();
-  await sSet(slug(player),JSON.stringify(data));
-  flash("✓ Predictions saved");
+  const ok=await sSet(slug(player),JSON.stringify(data));
+  if(ok){dirty=false;flash("✓ Predictions saved");}
+  else flash("⚠️ Couldn't save — check your connection and try again");
 }
 
 /* ---------------- VIEW: leaderboard ---------------- */
@@ -564,17 +602,21 @@ async function renderTable(){
   for(const n of PLAYERS){
     if(!keys.includes(slug(n)))continue;
     const raw=await sGet(slug(n));if(!raw)continue;
-    const d=JSON.parse(raw);
+    const d=safeParse(raw,null);if(!d)continue;
+    const dp=safePicks(d);
     let tot=0,exact=0,correct=0,played=0;
     for(const m of MATCHES){
-      const s=scoreFor(d.picks[m.id],results[m.id]);
+      const s=scoreFor(dp[m.id],results[m.id]);
       if(s===null)continue;
       played++;tot+=s;if(s===3)exact++;else if(s===1)correct++;
     }
-    rows.push({n,tot,exact,correct,played,made:Object.keys(d.picks||{}).length});
+    rows.push({n,tot,exact,correct,played,made:Object.keys(dp).length});
   }
-  rows.sort((a,b)=> b.tot-a.tot || b.exact-a.exact);
   const anyResults=Object.keys(results).length>0;
+  // Until points exist, it's just an alphabetical roster; once results come in, rank by points.
+  rows.sort(anyResults
+    ? (a,b)=> b.tot-a.tot || b.exact-a.exact || a.n.localeCompare(b.n)
+    : (a,b)=> a.n.localeCompare(b.n));
 
   if(rows.length===0){view.innerHTML='<div class="empty">No predictions submitted yet.<br>Be the first — tap <b>Predict</b>.</div>';return;}
   let h='';
@@ -584,11 +626,12 @@ async function renderTable(){
   let rank=0,prev=null;
   rows.forEach((r,i)=>{
     if(r.tot!==prev){rank=i+1;prev=r.tot;}
-    const cls=rank<=3?" r"+rank:"";
-    const medal=rank===1?"🥇":rank===2?"🥈":rank===3?"🥉":"#"+rank;
+    // No medals or winner styling until there are points — just a clean alphabetical list.
+    const cls=anyResults&&rank<=3?" r"+rank:"";
+    const medal=!anyResults?"·":(rank===1?"🥇":rank===2?"🥈":rank===3?"🥉":"#"+rank);
     h+='<div class="lb-card'+cls+'">'
       +'<div class="rk">'+medal+'</div>'
-      +'<div class="nm">'+r.n+'<span class="sub" style="display:block">'+(anyResults?(r.exact+' exact · '+r.correct+' result · '+r.played+' scored'):(r.made+' / 72 picks made'))+'</span></div>'
+      +'<div class="nm">'+r.n+'<span class="sub" style="display:block">'+(anyResults?(r.exact+' exact · '+r.correct+' result · '+r.played+' scored'):(r.made+' / '+MATCHES.length+' picks made'))+'</span></div>'
       +'<div class="tot">'+r.tot+'<small>POINTS</small></div></div>';
   });
   view.innerHTML=h;
@@ -599,7 +642,7 @@ async function renderResults(){
   el("savebar").classList.add("hide");
   await loadResults();
   const adminRaw=await sGet(slug(ADMIN));
-  const adminRec=adminRaw?JSON.parse(adminRaw):null;
+  const adminRec=adminRaw?safeParse(adminRaw,null):null;
   const adminHasPin=!!(adminRec&&adminRec.pin);
   const editable = adminHasPin && (player===ADMIN || resultsUnlocked);
 
@@ -646,7 +689,7 @@ async function renderResults(){
       });
     });
   });
-  el("saveRes").onclick=async()=>{await sSet("wc26:results",JSON.stringify(results));flash("✓ Results saved");};
+  el("saveRes").onclick=async()=>{const ok=await sSet("wc26:results",JSON.stringify(results));flash(ok?"✓ Results saved":"⚠️ Couldn't save results — check your connection");};
 }
 function resultsListHtml(editable){
   let h='<div class="filterbar" id="fbar"><button data-g="ALL" class="'+(groupFilter==="ALL"?"on":"")+'">All</button>';
@@ -673,22 +716,18 @@ function resultsListHtml(editable){
 function wireResultsFilter(){
   const fb=el("fbar");if(fb)fb.querySelectorAll("button").forEach(b=>b.onclick=()=>{groupFilter=b.dataset.g;render();});
 }
-async function loadResults(){const raw=await sGet("wc26:results");results=raw?JSON.parse(raw):{};}
+async function loadResults(){const raw=await sGet("wc26:results");results=raw?safeParse(raw,{}):{};}
 
-/* ---------------- VIEW: all picks (reveals after deadline) ---------------- */
+/* ---------------- VIEW: all picks (each game reveals once it locks) ---------------- */
 async function renderPicks(){
   el("savebar").classList.add("hide");
-  if(!isLocked()){
-    const d=Math.ceil((LOCK-Date.now())/86400000);
-    view.innerHTML='<div class="empty">🔒<br><br>Everyone\'s predictions stay hidden until the <b>10 June</b> deadline — no peeking, no copying.<br><br>They all reveal here once the tournament kicks off ('+d+' day'+(d===1?'':'s')+' to go).</div>';
-    return;
-  }
   view.innerHTML='<div class="empty">Loading everyone\'s picks…</div>';
   await loadResults();
   const all=await loadAllPicks(); // [{n, picks}]
-  if(all.length===0){view.innerHTML='<div class="empty">No predictions were submitted.</div>';return;}
+  if(all.length===0){view.innerHTML='<div class="empty">No predictions submitted yet.</div>';return;}
 
-  let h='<div class="filterbar" id="fbar"><button data-g="ALL" class="'+(groupFilter==="ALL"?"on":"")+'">All games</button>';
+  let h='<div class="r-note" style="margin-bottom:14px">Everyone\'s picks for a game stay hidden until that game\'s <b>matchday</b> — no peeking, no copying. They reveal here automatically once each game locks.</div>';
+  h+='<div class="filterbar" id="fbar"><button data-g="ALL" class="'+(groupFilter==="ALL"?"on":"")+'">All games</button>';
   groupsPresent().forEach(g=>h+='<button data-g="'+g+'" class="'+(groupFilter===g?"on":"")+'">Grp '+g+'</button>');
   h+='</div>';
   const list=MATCHES.filter(m=>groupFilter==="ALL"||m.grp===groupFilter);
@@ -696,20 +735,25 @@ async function renderPicks(){
   list.forEach(m=>{
     if(m.day!==lastDay){h+='<div class="day">'+m.day+'</div>';lastDay=m.day;}
     const r=results[m.id];
-    const scHtml=r?'<span class="sc">'+r.h+' – '+r.a+'</span>':'<span class="sc tbd">not played</span>';
+    const locked=matchLocked(m);
+    const scHtml=r?'<span class="sc">'+r.h+' – '+r.a+'</span>':(locked?'<span class="sc tbd">not played</span>':'<span class="sc tbd">'+m.time+'</span>');
     h+='<div class="pk"><div class="top"><span class="grp">GRP '+m.grp+'</span>'
       +'<span class="fl">'+m.hf+'</span><span class="nm">'+m.h+'</span>'
       +'<span class="muted" style="font-size:11px">v</span>'
       +'<span class="fl">'+m.af+'</span><span class="nm">'+m.a+'</span>'
       +scHtml+'</div><div class="plist">';
-    all.forEach(pl=>{
-      const p=pl.picks[m.id];
-      if(!p){h+='<div class="pr"><span class="pn">'+pl.n+'</span><span class="miss">— no pick</span></div>';return;}
-      let pp='';
-      if(r){const s=scoreFor(p,r);
-        pp='<span class="pp '+(s===3?'p3':s===1?'p1':'p0')+'">+'+s+'</span>';}
-      h+='<div class="pr"><span class="pn">'+pl.n+'</span><span class="pv">'+p.h+'–'+p.a+'</span>'+pp+'</div>';
-    });
+    if(!locked){
+      h+='<div class="pr"><span class="miss">🔒 Picks hidden until matchday ('+m.day.replace(/^\w+\s/,"")+')</span></div>';
+    }else{
+      all.forEach(pl=>{
+        const p=pl.picks[m.id];
+        if(!p){h+='<div class="pr"><span class="pn">'+pl.n+'</span><span class="miss">— no pick</span></div>';return;}
+        let pp='';
+        if(r){const s=scoreFor(p,r);
+          pp='<span class="pp '+(s===3?'p3':s===1?'p1':'p0')+'">+'+s+'</span>';}
+        h+='<div class="pr"><span class="pn">'+pl.n+'</span><span class="pv">'+p.h+'–'+p.a+'</span>'+pp+'</div>';
+      });
+    }
     h+='</div></div>';
   });
   view.innerHTML=h;
@@ -721,7 +765,8 @@ async function loadAllPicks(){
   for(const n of PLAYERS){
     if(!keys.includes(slug(n)))continue;
     const raw=await sGet(slug(n));if(!raw)continue;
-    out.push({n,picks:JSON.parse(raw).picks||{}});
+    const d=safeParse(raw,null);if(!d)continue;
+    out.push({n,picks:safePicks(d)});
   }
   return out;
 }
@@ -740,6 +785,9 @@ document.querySelectorAll("nav button").forEach(b=>{
   b.onclick=()=>{tab=b.dataset.tab;groupFilter="ALL";render();};
 });
 el("saveBtn").onclick=saveMine;
+el("nextBtn").onclick=()=>jumpToNext(false);
+// Guard against losing unsaved predictions on reload / tab close.
+window.addEventListener("beforeunload",e=>{if(dirty){e.preventDefault();e.returnValue="";}});
 
 /* ---------------- INIT ---------------- */
 (async function(){
@@ -748,4 +796,20 @@ el("saveBtn").onclick=saveMine;
   renderHeader();
   goNames();
 })();
+
+/* ---------------- TEST HOOK (dev only) ----------------
+   Exposed ONLY when the page is opened with ?sim — used by sim.html to drive the
+   real app code against in-memory data. Adds nothing to the normal app. */
+if(new URLSearchParams(location.search).has("sim")){
+  window.__sim={
+    cache, render, scoreFor, outcome, MATCHES, PLAYERS, slug,
+    setTab:t=>{tab=t;}, getTab:()=>tab,
+    setPlayer:p=>{player=p;}, setResults:r=>{results=r;},
+    matchLocked, openCount:()=>openMatches().length,
+    setPicks:p=>{picks=p;}, getPicks:()=>picks, jumpToNext,
+    detach:()=>{ if(unsubKv){try{unsubKv();}catch(e){}} unsubKv=null; },   // isolate from the live DB
+    clearCache:()=>{ for(const k in cache) delete cache[k]; }
+  };
+  console.log("[sim] test hook ready");
+}
 </script>

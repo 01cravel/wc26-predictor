@@ -1,0 +1,296 @@
+<!doctype html>
+<!-- ============================================================
+     TOURNAMENT SIMULATION HARNESS (dev tool — do not deploy)
+     Loads the REAL app (index.html?sim=1) in an iframe, isolates it from the
+     live Firebase, seeds 13 players with edge cases, then replays all 72
+     results in schedule order — asserting the rendered leaderboard against an
+     independent scoring reference at every step. Open /sim.html to run.
+     ============================================================ -->
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>WC26 — Tournament Simulation</title>
+<style>
+  :root{--ok:#16a34a;--bad:#dc2626;--warn:#b45309;--ink:#0d1426;--mut:#64748b;--line:#e2e8f0;}
+  *{box-sizing:border-box}
+  body{margin:0;font:14px/1.5 system-ui,sans-serif;color:#0f172a;background:#f8fafc;display:flex;height:100vh;overflow:hidden}
+  .left{width:420px;flex:none;border-right:1px solid var(--line);display:flex;flex-direction:column;background:#fff}
+  .right{flex:1;display:flex;flex-direction:column;background:#0b1220}
+  .right iframe{flex:1;border:0;width:100%}
+  .right .cap{color:#94a3b8;font-size:12px;padding:6px 12px;background:#0b1220;border-bottom:1px solid #1e293b}
+  header{padding:14px 16px;border-bottom:1px solid var(--line)}
+  header h1{margin:0;font-size:16px}
+  header .sub{color:var(--mut);font-size:12px;margin-top:2px}
+  #summary{padding:10px 16px;font-weight:700;border-bottom:1px solid var(--line);font-size:15px}
+  #summary.pass{background:#f0fdf4;color:var(--ok)}
+  #summary.fail{background:#fef2f2;color:var(--bad)}
+  #summary.run{background:#fffbeb;color:var(--warn)}
+  #log{flex:1;overflow:auto;padding:8px 16px}
+  .grp{margin:12px 0 4px;font-weight:700;color:#334155;font-size:12px;text-transform:uppercase;letter-spacing:.5px}
+  .row{display:flex;gap:8px;padding:3px 0;align-items:baseline;font-size:13px}
+  .row .ic{flex:none;width:16px}
+  .row.ok .ic{color:var(--ok)} .row.bad .ic{color:var(--bad)} .row.warn .ic{color:var(--warn)}
+  .row .d{color:var(--mut);font-size:12px;margin-left:auto;text-align:right}
+  .row.bad{background:#fef2f2}
+  button{font:inherit;font-weight:700;padding:8px 14px;border:0;border-radius:8px;background:#2563eb;color:#fff;cursor:pointer;margin:10px 16px}
+</style>
+
+<div class="left">
+  <header>
+    <h1>⚽ WC26 Tournament Simulation</h1>
+    <div class="sub">Drives the real app · replays every result · isolated from live Firebase</div>
+  </header>
+  <div id="summary" class="run">Booting…</div>
+  <button id="rerun" style="display:none">↻ Re-run</button>
+  <div id="log"></div>
+</div>
+<div class="right">
+  <div class="cap">Live view of the real app (index.html) as the simulation drives it →</div>
+  <iframe id="app" src="index.html?sim=1"></iframe>
+</div>
+
+<script>
+const SEED = 20260603;                 // deterministic — change to explore other tournaments
+const log = document.getElementById('log');
+const summary = document.getElementById('summary');
+let passN = 0, failN = 0, warnN = 0, curGrp = '';
+
+function group(t){ curGrp=t; const d=document.createElement('div'); d.className='grp'; d.textContent=t; log.appendChild(d); }
+function line(pass, name, detail, kind){
+  const k = kind || (pass ? 'ok' : 'bad');
+  if(k==='ok') passN++; else if(k==='warn') warnN++; else failN++;
+  const d=document.createElement('div'); d.className='row '+k;
+  d.innerHTML='<span class="ic">'+(k==='ok'?'✓':k==='warn'?'!':'✗')+'</span><span>'+name+'</span>'+(detail?'<span class="d">'+detail+'</span>':'');
+  log.appendChild(d); log.scrollTop=log.scrollHeight;
+}
+const check = (name, cond, detail) => line(!!cond, name, detail, cond?'ok':'bad');
+const warn  = (name, detail)      => line(false, name, detail, 'warn');
+
+// ---- deterministic PRNG ----
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return ((t^t>>>14)>>>0)/4294967296;};}
+
+// ---- independent scoring reference (NOT the app's code) ----
+function refScore(p,r){
+  if(!p||!r) return null;
+  if(p.h===r.h && p.a===r.a) return 3;
+  const po = p.h>p.a?1:(p.h<p.a?2:0);
+  const ro = r.h>r.a?1:(r.h<r.a?2:0);
+  return po===ro ? 1 : 0;
+}
+
+async function settle(doc){
+  // Flush microtasks (NOT timers/rAF — those are throttled when the preview tab is backgrounded).
+  // The app's renders resolve purely via microtasks (in-memory cache reads), so this completes fast.
+  for(let i=0;i<5000;i++){
+    const v=doc.getElementById('view'); const txt=v?v.textContent:'';
+    if(v && txt && !/Loading/.test(txt)) return;
+    await Promise.resolve();
+  }
+}
+function readBoard(doc){
+  const map={};
+  doc.querySelectorAll('.lb-card').forEach(c=>{
+    const name=c.querySelector('.nm').firstChild.textContent.trim();
+    const tot=parseInt(c.querySelector('.tot').textContent,10);
+    map[name]=tot;
+  });
+  return map;
+}
+function refBoard(players, results){
+  const map={};
+  for(const p of players){
+    if(p.corrupt) continue;
+    let tot=0;
+    for(const id in results){ const s=refScore(p.picks[id], results[id]); if(s!==null) tot+=s; }
+    map[p.name]=tot;
+  }
+  return map;
+}
+
+async function run(){
+  passN=failN=warnN=0; log.innerHTML=''; summary.className='run'; summary.textContent='Running…';
+  const iframe=document.getElementById('app');
+  const win=iframe.contentWindow;
+
+  // wait for the gated test hook
+  await new Promise((res,rej)=>{ const t0=Date.now(); (function p(){ if(win.__sim) return res(); if(Date.now()-t0>8000) return rej(new Error('test hook never appeared')); setTimeout(p,50); })(); });
+  // let the app's initial (empty) Firestore snapshot land, THEN detach so nothing from the live DB can overwrite our sim
+  await new Promise(r=>setTimeout(r,1500));
+  const S=win.__sim;
+  S.detach(); S.clearCache();
+  const doc=iframe.contentDocument;
+  const realNow=win.Date.now;
+
+  const { MATCHES, PLAYERS, slug, scoreFor } = S;
+
+  group('Core scoring function (vs independent reference)');
+  let mism=0, tot=0;
+  for(let ph=0;ph<=6;ph++)for(let pa=0;pa<=6;pa++)for(let rh=0;rh<=6;rh++)for(let ra=0;ra<=6;ra++){
+    tot++; if(scoreFor({h:ph,a:pa},{h:rh,a:ra}) !== refScore({h:ph,a:pa},{h:rh,a:ra})) mism++;
+  }
+  check('All '+tot+' pred×result combos match reference', mism===0, mism?mism+' mismatches':'0 mismatches');
+  check('No pick → null', scoreFor(null,{h:1,a:0})===null && scoreFor(undefined,{h:1,a:0})===null);
+  check('No result → null', scoreFor({h:1,a:0},null)===null);
+
+  // ---- seed 13 players with deliberate edge cases ----
+  group('Seeding 13 players (with edge cases)');
+  const rng=mulberry32(SEED);
+  const gs=()=>Math.floor(rng()*5);                 // 0–4 goals
+  const players=PLAYERS.map((name,i)=>{
+    const picks={}; let profile='random full';
+    if(i===0){ profile='all 0–0 picks'; MATCHES.forEach(m=>picks[m.id]={h:0,a:0}); }
+    else if(i===1){ const half=Math.floor(MATCHES.length/2); profile='partial ('+half+'/'+MATCHES.length+')'; MATCHES.slice(0,half).forEach(m=>picks[m.id]={h:gs(),a:gs()}); }
+    else if(i===2){ profile='zero picks'; /* none */ }
+    else if(i===3){ profile='high scorelines'; MATCHES.forEach(m=>picks[m.id]={h:3+Math.floor(rng()*5),a:Math.floor(rng()*3)}); }
+    else if(i===4){ profile='CORRUPT record'; }
+    else { MATCHES.forEach(m=>picks[m.id]={h:gs(),a:gs()}); }
+    return { name, picks, corrupt:i===4, profile };
+  });
+  // inject into the app's in-memory cache (NO Firestore writes)
+  players.forEach(p=>{
+    S.cache[slug(p.name)] = p.corrupt ? '{this is : not json,,' : JSON.stringify({pin:'hSIM',picks:p.picks,updated:1});
+  });
+  players.forEach(p=>line(true,p.name,p.profile,'ok'));
+  const valid=players.filter(p=>!p.corrupt);
+
+  // ---- pre-deadline behaviour ----
+  group('Pre-tournament behaviour (today — nothing locked yet)');
+  S.setTab('picks'); S.render(); await settle(doc);
+  check('All Picks lists all '+MATCHES.length+' games', doc.querySelectorAll('.pk').length===MATCHES.length, doc.querySelectorAll('.pk').length+' cards');
+  check('No picks revealed before any matchday', doc.querySelectorAll('.pk .pv').length===0, doc.querySelectorAll('.pk .pv').length+' revealed');
+  check('Every game shows "hidden until matchday"', doc.querySelectorAll('.pk .miss').length===MATCHES.length);
+  S.setPlayer(valid[0].name); S.setTab('predict'); S.render(); await settle(doc);
+  check('No games locked in predict today', doc.querySelectorAll('.m.locked').length===0);
+  check('Save bar visible (games still open)', !doc.getElementById('savebar').classList.contains('hide'));
+  S.setPlayer(null);
+  S.setTab('table'); S.render(); await settle(doc);
+  const board0=readBoard(doc);
+  check('Leaderboard renders with no results', Object.keys(board0).length===valid.length, Object.keys(board0).length+' cards');
+  check('Corrupt record skipped (not '+players[4].name+')', !(players[4].name in board0));
+  check('Everyone on 0 before results', Object.values(board0).every(v=>v===0));
+
+  // ---- replay the whole tournament, result by result, in schedule order ----
+  group('Replaying '+MATCHES.length+' results in schedule order');
+  const results={}; const rngR=mulberry32(SEED^0x9e3779b9);
+  let prev=refBoard(valid,{}); let monoFails=0, mismatchFails=0; let tBoard=0;
+  for(let i=0;i<MATCHES.length;i++){
+    const m=MATCHES[i];
+    results[m.id]={h:Math.floor(rngR()*5), a:Math.floor(rngR()*5)};
+    S.cache['wc26:results']=JSON.stringify(results);
+    S.setTab('table');
+    const t0=performance.now(); S.render(); await settle(doc); tBoard+=performance.now()-t0;
+    const dom=readBoard(doc);
+    const ref=refBoard(valid,results);
+    // app DOM totals must equal the independent reference for every player
+    for(const p of valid){ if(dom[p.name]!==ref[p.name]) mismatchFails++; }
+    // totals can only ever rise as results come in
+    for(const p of valid){ if(dom[p.name] < (prev[p.name]||0)) monoFails++; }
+    prev=ref;
+    const step=Math.max(1,Math.round(MATCHES.length/6));
+    if(i%step===step-1 || i===MATCHES.length-1){
+      const leader=Object.entries(dom).sort((a,b)=>b[1]-a[1])[0];
+      line(mismatchFails===0&&monoFails===0, 'After '+(i+1)+' results', 'leader '+leader[0].split(' ')[0]+' '+leader[1]+'pts', (mismatchFails===0&&monoFails===0)?'ok':'bad');
+    }
+  }
+  check('Leaderboard == reference at all '+MATCHES.length+' steps', mismatchFails===0, mismatchFails?mismatchFails+' divergences':'exact');
+  check('No total ever decreased (monotonic)', monoFails===0, monoFails?monoFails+' drops':'held');
+  check('Avg leaderboard render', true, (tBoard/MATCHES.length).toFixed(1)+' ms', (tBoard/MATCHES.length)<500?'ok':'warn');
+
+  // ---- ranking & tie-break order ----
+  group('Final standings');
+  const domFinal=readBoard(doc);
+  const refSorted=valid.map(p=>p.name).sort((a,b)=>domFinal[b]-domFinal[a]);
+  const domOrder=[...doc.querySelectorAll('.lb-card .nm')].map(n=>n.firstChild.textContent.trim());
+  let orderOk=true; for(let i=0;i<domOrder.length-1;i++){ if(domFinal[domOrder[i]] < domFinal[domOrder[i+1]]) orderOk=false; }
+  check('Leaderboard sorted by points desc', orderOk);
+  check('All '+valid.length+' valid players shown', domOrder.length===valid.length, domOrder.length+' shown');
+
+  // ---- incremental vs single-shot (idempotency) ----
+  group('Idempotency');
+  S.clearCache(); players.forEach(p=>{ S.cache[slug(p.name)]=p.corrupt?'{bad,,':JSON.stringify({pin:'hSIM',picks:p.picks,updated:1}); });
+  S.cache['wc26:results']=JSON.stringify(results);     // all at once
+  S.setTab('table'); S.render(); await settle(doc);
+  const oneShot=readBoard(doc);
+  let idem=true; for(const p of valid){ if(oneShot[p.name]!==domFinal[p.name]) idem=false; }
+  check('Step-by-step total == single-shot total', idem);
+
+  // ---- mid-tournament: per-game locking (some open, some locked) ----
+  group('Per-game locking mid-tournament (clock → 20 Jun 2026)');
+  const MONS={Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
+  const refLockTs=day=>{const p=day.trim().split(/\s+/);return Date.UTC(2026,MONS[p[2]],+p[1],-1,0,0);}; // 00:00 +01:00
+  const mid=Date.parse('2026-06-20T12:00:00+01:00');
+  win.Date.now=()=>mid;
+  const expLocked=MATCHES.filter(m=>mid>=refLockTs(m.day)).length;
+  const appLocked=MATCHES.filter(m=>S.matchLocked(m)).length;
+  check('App lock-count matches independent date math', appLocked===expLocked, appLocked+' locked (exp '+expLocked+')');
+  check('Some open, some locked', appLocked>0 && appLocked<MATCHES.length, appLocked+'/'+MATCHES.length+' locked');
+  const midResults={}; MATCHES.forEach(m=>{ if(mid>=refLockTs(m.day)) midResults[m.id]=results[m.id]; });  // only played (locked) games have results
+  S.cache['wc26:results']=JSON.stringify(midResults);
+  S.setTab('picks'); S.render(); await settle(doc);
+  const revealedCards=[...doc.querySelectorAll('.pk')].filter(pk=>pk.querySelector('.pv')).length;
+  check('Only locked games reveal picks in All Picks', revealedCards===expLocked, revealedCards+' revealed');
+  S.setPlayer(valid[0].name); S.setPicks(valid[0].picks); S.setTab('predict'); S.render(); await settle(doc);
+  check('Predict locks exactly the locked games', doc.querySelectorAll('.m.locked').length===expLocked, doc.querySelectorAll('.m.locked').length+' locked cards');
+  const openBtns=[...doc.querySelectorAll('.m:not(.locked) .stp button')];
+  check('Open games keep working steppers', openBtns.length>0 && openBtns.every(b=>win.getComputedStyle(b).display!=='none'));
+  const lockBtns=[...doc.querySelectorAll('.m.locked .stp button')];
+  check('Locked games hide their steppers', lockBtns.length>0 && lockBtns.every(b=>win.getComputedStyle(b).display==='none'));
+  check('Save bar visible while games remain open', !doc.getElementById('savebar').classList.contains('hide'));
+  win.Date.now=realNow;
+
+  // ---- post-tournament: everything locked ----
+  group('Post-tournament (clock → 1 Jul 2026 — all locked)');
+  const future=Date.parse('2026-07-01T12:00:00Z');
+  win.Date.now=()=>future;
+  S.setTab('picks'); const tp=performance.now(); S.render(); await settle(doc); const allPicksMs=performance.now()-tp;
+  const pkCards=doc.querySelectorAll('.pk').length;
+  check('All Picks reveals all '+MATCHES.length+' games', pkCards===MATCHES.length, pkCards+' / '+MATCHES.length+' match cards');
+  const prRows=doc.querySelectorAll('.pk .pr').length;
+  check('All Picks shows every valid player per match (corrupt excluded)', prRows===MATCHES.length*valid.length, prRows+' rows ('+valid.length+'×'+MATCHES.length+')');
+  check('All Picks render time', true, allPicksMs.toFixed(0)+' ms', allPicksMs<1500?'ok':'warn');
+  check('Leaderboard still works', (S.setTab('table'),S.render(),true));
+  await settle(doc);
+  S.setPlayer(valid[5].name); S.setPicks(valid[5].picks); S.setTab('predict'); S.render(); await settle(doc);
+  const cards=doc.querySelectorAll('.m').length;
+  const lockedCards=doc.querySelectorAll('.m.locked').length;
+  const btns=[...doc.querySelectorAll('.m .stp button')];
+  const allHidden=btns.length>0 && btns.every(b=>win.getComputedStyle(b).display==='none');
+  check('Predict fully locks (no steppers) when all done', cards>0 && lockedCards===cards && allHidden, lockedCards+'/'+cards+' cards locked');
+  check('Save bar hidden when nothing left to edit', doc.getElementById('savebar').classList.contains('hide'));
+  // a partial player (40/72) should show "no pick" on the games they never predicted
+  S.setPlayer(valid[1].name); S.setPicks(valid[1].picks); S.setTab('predict'); S.render(); await settle(doc);
+  const noPick=doc.querySelectorAll('.m .nopick').length;
+  check('Unpredicted locked games read "no pick"', noPick===MATCHES.length-Object.keys(valid[1].picks).length, noPick+' no-pick / exp '+(MATCHES.length-Object.keys(valid[1].picks).length));
+  S.setPicks({});
+  win.Date.now=realNow;
+
+  // ---- jump to next unpicked open game ----
+  group('Jump to next unpicked game');
+  S.setPlayer(valid[0].name);
+  const jp={}; MATCHES.slice(0,5).forEach(m=>jp[m.id]={h:1,a:0});   // predicted first 5 only
+  S.setPicks(jp); S.setTab('predict'); S.render(); await settle(doc);
+  S.jumpToNext(false); await settle(doc);
+  const flashed=doc.querySelector('.m.flashcard');
+  const expNext=MATCHES.find(m=>!S.matchLocked(m) && !jp[m.id]);
+  check('Lands on first unpicked open game', flashed && flashed.dataset.id===expNext.id, 'landed '+(flashed?flashed.dataset.id:'none')+' (exp '+expNext.id+')');
+  const allp={}; MATCHES.forEach(m=>allp[m.id]={h:1,a:0});
+  S.setPicks(allp); S.setTab('predict'); S.render(); await settle(doc);
+  S.jumpToNext(false); await settle(doc);
+  check('No jump when everything predicted', !doc.querySelector('.m.flashcard'));
+  S.setPicks({}); S.setPlayer(null);
+
+  // ---- resilience: corrupt results doc mid-tournament ----
+  group('Resilience: corrupt results doc');
+  S.cache['wc26:results']='{half a result,,';      // corrupt the results doc itself
+  let threw=false; try{ S.setTab('table'); S.render(); await settle(doc); }catch(e){ threw=true; }
+  check('Corrupt results doc does not crash render', !threw && doc.querySelectorAll('.lb-card').length===valid.length, doc.querySelectorAll('.lb-card').length+' cards');
+
+  // ---- verdict ----
+  const ok = failN===0;
+  summary.className = ok?'pass':'fail';
+  summary.textContent = (ok?'✓ ALL PASS':'✗ '+failN+' FAILED') + '  ·  '+passN+' passed'+(warnN?', '+warnN+' warn':'')+(failN?', '+failN+' failed':'');
+  document.getElementById('rerun').style.display='block';
+}
+
+document.getElementById('rerun').onclick=()=>{ document.getElementById('app').src='index.html?sim=1&_='+SEED; setTimeout(run,300); };
+window.addEventListener('load',()=>setTimeout(run,400));
+</script>
