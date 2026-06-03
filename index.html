@@ -874,6 +874,7 @@ document.querySelectorAll("nav button").forEach(b=>{
     tab=b.dataset.tab;groupFilter="ALL";
     if(tab==="predict") editId=null;   // returning to predict shows a clean, collapsed list
     render();
+    window.scrollTo(0,0);              // always jump back to the top when switching tabs
     if(tab==="picks") tabIntro("wc26:seenPicksIntro",{ico:'👀',title:'All Picks',body:"You'll be able to see who your friends have picked on the day of the game.",btn:'Got it'});
     else if(tab==="results") tabIntro("wc26:seenResultsIntro",{ico:'📋',title:'Results',body:'The results will show here when they come in.',btn:'Got it'});
   };
