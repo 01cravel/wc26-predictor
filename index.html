@@ -561,7 +561,15 @@ function readPin(){return [...el("pinrow").children].map(i=>i.value).join("");}
 
 /* ---------------- VIEW: predict ---------------- */
 function enterPredict(){
-  tab="predict";editId=null;jumpPending=true;setNav();render();
+  editId=null;
+  // Already predicted everything you can? Skip the predict screen and land on the leaderboard.
+  const left=openMatches().filter(m=>!picks[m.id]).length;
+  if(Object.keys(picks).length>0 && left===0){
+    tab="table";setNav();render();window.scrollTo(0,0);
+    paymentPrompt();
+    return;
+  }
+  tab="predict";jumpPending=true;setNav();render();
   if(!seenFlag("wc26:seenPredictIntro")){           // first time: welcome, then the payment prompt
     markFlag("wc26:seenPredictIntro");
     showModal({ico:'⚽',title:'Predict the scores',
@@ -953,7 +961,7 @@ if(_LOCALHOST && new URLSearchParams(location.search).has("sim")){
     setTab:t=>{tab=t;}, getTab:()=>tab,
     setPlayer:p=>{player=p;}, setResults:r=>{results=r;}, setStoreReady:v=>{storeReady=v;},
     matchLocked, openCount:()=>openMatches().length,
-    setPicks:p=>{picks=p;}, getPicks:()=>picks, jumpToNext, setDirty:d=>{dirty=d;}, setEdit:id=>{editId=id;}, noWrites:()=>{db=null;}, paymentPrompt,
+    setPicks:p=>{picks=p;}, getPicks:()=>picks, jumpToNext, setDirty:d=>{dirty=d;}, setEdit:id=>{editId=id;}, noWrites:()=>{db=null;}, paymentPrompt, enterPredict,
     detach:()=>{ if(unsubKv){try{unsubKv();}catch(e){}} unsubKv=null; },   // isolate from the live DB
     clearCache:()=>{ for(const k in cache) delete cache[k]; }
   };

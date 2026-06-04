@@ -388,6 +388,21 @@ async function run(){
   doc.getElementById('modalBtn2')?.click(); await settle(doc);   // "I'll pay later" — must not navigate
   S.setPlayer(null);
 
+  // ---- login lands on the right screen ----
+  group('Login destination');
+  win.Date.now=realNow;                       // all games open
+  win.localStorage.setItem('wc26:seenPredictIntro','1');         // skip welcome
+  win.localStorage.setItem('wc26:thanked','1'); win.localStorage.setItem('wc26:payReminded','1');  // skip payment modal
+  S.cache['wc26:paid']='[]';
+  S.setPlayer('Andy Mathews');
+  const allP={}; MATCHES.forEach(m=>allP[m.id]={h:1,a:0});
+  S.setPicks(allP); S.enterPredict(); await settle(doc);
+  check('Finished player lands on the leaderboard', S.getTab()==='table', 'tab='+S.getTab());
+  const part={}; MATCHES.slice(0,3).forEach(m=>part[m.id]={h:1,a:0});
+  S.setPicks(part); S.enterPredict(); await settle(doc);
+  check('Unfinished player lands on predict', S.getTab()==='predict', 'tab='+S.getTab());
+  S.setPicks({}); S.setPlayer(null);
+
   // ---- verdict ----
   const ok = failN===0;
   summary.className = ok?'pass':'fail';
