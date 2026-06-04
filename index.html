@@ -69,6 +69,7 @@
     background:linear-gradient(135deg,var(--cyan),var(--green));color:#04211a}
   .name-btn.done{border-color:rgba(0,224,106,.5)}
   .name-btn .tick{position:absolute;top:7px;right:9px;font-size:11px;color:var(--green)}
+  .name-btn .tick.paid{color:var(--gold)}
 
   /* pin */
   .pinrow{display:flex;gap:10px;justify-content:center;margin:6px 0 16px}
@@ -169,6 +170,8 @@
   .lb-card.r1{border-color:rgba(255,203,43,.5);background:linear-gradient(180deg,rgba(255,203,43,.08),var(--card))}
   .lb-card .nm{font-weight:700;font-size:15px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .lb-card .sub{font-size:11px;color:var(--mut);font-weight:400}
+  .paidbadge{font-size:9px;font-weight:800;letter-spacing:.5px;color:var(--gold);background:rgba(255,203,43,.14);
+    border:1px solid rgba(255,203,43,.4);border-radius:20px;padding:2px 7px;vertical-align:middle;white-space:nowrap}
   .lb-card .form{display:flex;gap:4px;margin-top:6px}
   .lb-card .fd{width:9px;height:9px;border-radius:50%}
   .lb-card .fd.f3{background:var(--green)} .lb-card .fd.f1{background:var(--gold)} .lb-card .fd.f0{background:var(--red)}
@@ -487,11 +490,14 @@ async function goNames(){
   }
   view.innerHTML='<div class="panel"><h2>Who are you?</h2><p>Pick your name, set a 4-digit PIN, then make your predictions. Your PIN stops anyone else editing your picks — and this device stays signed in as you.</p><div class="names" id="names"></div></div>';
   const done = await whoHasSaved();
+  const paid = await loadPaid();
   const box=el("names");
   PLAYERS.forEach(n=>{
+    const isPaid=paid.includes(nameKey(n));
     const b=document.createElement("button");
     b.className="name-btn"+(done.has(n)?" done":"");
-    b.innerHTML='<span class="ini">'+initials(n)+'</span>'+n+(done.has(n)?'<span class="tick">✓ in</span>':'');
+    const tick = isPaid?'<span class="tick paid">✓ paid</span>' : (done.has(n)?'<span class="tick">✓ in</span>':'');
+    b.innerHTML='<span class="ini">'+initials(n)+'</span>'+n+tick;
     b.onclick=()=>pickName(n);
     box.appendChild(b);
   });
@@ -703,6 +709,7 @@ async function renderTable(){
   setSavebarVisible(false);
   view.innerHTML='<div class="empty">Loading standings…</div>';
   await loadResults();
+  const paid=await loadPaid();
   const keys=await sList("wc26:pred:");
   const rows=[];
   for(const n of PLAYERS){
@@ -739,9 +746,10 @@ async function renderTable(){
     const formHtml=(anyResults&&r.form.length)
       ? '<div class="form">'+r.form.slice(-8).map(s=>'<span class="fd '+(s===3?'f3':s===1?'f1':'f0')+'" title="'+(s===3?'+3 exact':s===1?'+1 result':'0 pts')+'"></span>').join('')+'</div>'
       : '';
+    const paidBadge=paid.includes(nameKey(r.n))?' <span class="paidbadge">✓ PAID</span>':'';
     h+='<div class="lb-card'+cls+'">'
       +'<div class="rk">'+medal+'</div>'
-      +'<div class="nm">'+r.n+'<span class="sub" style="display:block">'+(anyResults?(r.exact+' exact · '+r.correct+' result · '+r.played+' scored'):(r.made+' / '+MATCHES.length+' picks made'))+'</span>'+formHtml+'</div>'
+      +'<div class="nm">'+r.n+paidBadge+'<span class="sub" style="display:block">'+(anyResults?(r.exact+' exact · '+r.correct+' result · '+r.played+' scored'):(r.made+' / '+MATCHES.length+' picks made'))+'</span>'+formHtml+'</div>'
       +'<div class="tot">'+r.tot+'<small>POINTS</small></div></div>';
   });
   view.innerHTML=h;
