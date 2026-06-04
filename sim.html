@@ -371,6 +371,23 @@ async function run(){
   check('No warning when everything is predicted', !(doc.getElementById('modal').classList.contains('show') && /still to go/.test(mc())));
   S.setPicks({});
 
+  // ---- payment prompt on login ----
+  group('Payment prompt on login');
+  S.cache['wc26:paid']=JSON.stringify(["scottocallaghan"]);   // bare name-key (no wc26:pred: prefix)
+  const lc=k=>{try{win.localStorage.removeItem(k);}catch(e){}};
+  lc('wc26:thanked'); lc('wc26:payReminded');
+  S.setPlayer("Scott O'Callaghan"); await S.paymentPrompt(); await settle(doc);
+  check('Paid player gets a thank-you', /thanks for paying/i.test(doc.getElementById('modalCard').textContent), doc.getElementById('modalCard').textContent.slice(0,30));
+  await S.paymentPrompt();                                   // already thanked → must not show again
+  doc.getElementById('modalBtn')?.click(); await settle(doc);
+  lc('wc26:thanked'); lc('wc26:payReminded');
+  S.setPlayer("Andy Mathews"); await S.paymentPrompt(); await settle(doc);
+  const pm=doc.getElementById('modalCard').textContent;
+  check('Unpaid player gets a £10 pay reminder', /£10/.test(pm) && /pay/i.test(pm), pm.slice(0,40));
+  check('Reminder offers pay-now and pay-later', !!doc.getElementById('modalBtn') && !!doc.getElementById('modalBtn2'));
+  doc.getElementById('modalBtn2')?.click(); await settle(doc);   // "I'll pay later" — must not navigate
+  S.setPlayer(null);
+
   // ---- verdict ----
   const ok = failN===0;
   summary.className = ok?'pass':'fail';

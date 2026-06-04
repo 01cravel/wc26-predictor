@@ -329,7 +329,8 @@ const openMatches = () => MATCHES.filter(m=>!matchLocked(m));
 const nextLockTs  = () => MATCHES.reduce((a,m)=> (!matchLocked(m) && m.lockTs<a) ? m.lockTs : a, Infinity);
 
 /* ---------------- STORAGE (Firestore-backed, live cache) ---------------- */
-function slug(n){return "wc26:pred:"+n.replace(/[^a-z0-9]/gi,"").toLowerCase();}
+function nameKey(n){return (n||"").replace(/[^a-z0-9]/gi,"").toLowerCase();}
+function slug(n){return "wc26:pred:"+nameKey(n);}
 async function sGet(k){return cache[k]!==undefined?cache[k]:null;}
 async function sSet(k,v){
   cache[k]=v;                                  // optimistic local update
@@ -395,10 +396,33 @@ function showModal({ico,title,body,btn,onClose,btn2,onBtn2}){
   if(btn2) el("modalBtn2").onclick=()=>{ dismiss(); if(onBtn2)onBtn2(); };
   m.onclick=e=>{ if(e.target!==m) return; dismiss(); if(!btn2 && onClose) onClose(); };  // backdrop: single-button acts, two-button just closes
 }
+function seenFlag(k){try{return localStorage.getItem(k)==="1";}catch(e){return false;}}
+function markFlag(k){try{localStorage.setItem(k,"1");}catch(e){}}
 // Show a one-time intro the first time a tab is opened on this device.
 function tabIntro(key,opts){
-  try{ if(localStorage.getItem(key)==="1") return; localStorage.setItem(key,"1"); }catch(e){}
+  if(seenFlag(key)) return; markFlag(key);
   showModal(opts);
+}
+/* ---------------- PAYMENT STATUS ----------------
+   The admin marks who's paid in the shared "wc26:paid" record (a list of slugs).
+   On login a player sees a one-off reminder if unpaid, or a one-off thanks if paid. */
+const MONZO="https://monzo.me/lukecraven3/10.00?h=6Aspp_&d=World%20Cup%20Predictor%20&account_type=personal";
+async function loadPaid(){const raw=await sGet("wc26:paid");const a=safeParse(raw,[]);return Array.isArray(a)?a:[];}
+async function paymentPrompt(){
+  if(!player) return;
+  const paid=await loadPaid();
+  const first=player.split(" ")[0];
+  if(paid.includes(nameKey(player))){
+    if(seenFlag("wc26:thanked")) return; markFlag("wc26:thanked");
+    showModal({ico:'✅',title:'Thanks for paying!',
+      body:"You're all set, "+first+". Good luck! Winner takes <b>80%</b>, runner-up <b>20%</b>.",btn:'Let\'s go'});
+  }else{
+    if(seenFlag("wc26:payReminded")) return; markFlag("wc26:payReminded");
+    showModal({ico:'💸',title:'One more thing…',
+      body:"Entry is <b>£10</b> to be in the running (winner 80%, runner-up 20%). Pay with any debit card, which works even without Monzo.",
+      btn:'Pay £10 now', onClose:()=>{ try{window.open(MONZO,"_blank","noopener");}catch(e){} },
+      btn2:"I'll pay later"});
+  }
 }
 function updateProgress(){
   const done=Object.keys(picks).length, total=MATCHES.length;
@@ -532,9 +556,14 @@ function readPin(){return [...el("pinrow").children].map(i=>i.value).join("");}
 /* ---------------- VIEW: predict ---------------- */
 function enterPredict(){
   tab="predict";editId=null;jumpPending=true;setNav();render();
-  tabIntro("wc26:seenPredictIntro",{ico:'⚽',title:'Predict the scores',
-    body:"We've hand-picked the 10 standout games of the World Cup group stage. Set your predicted score for each one, then save your picks. Good luck!",
-    btn:"Let's go"});
+  if(!seenFlag("wc26:seenPredictIntro")){           // first time: welcome, then the payment prompt
+    markFlag("wc26:seenPredictIntro");
+    showModal({ico:'⚽',title:'Predict the scores',
+      body:"We've hand-picked the 10 standout games of the World Cup group stage. Set your predicted score for each one, then save your picks. Good luck!",
+      btn:"Let's go", onClose:paymentPrompt});
+  }else{
+    paymentPrompt();
+  }
 }
 
 function groupsPresent(){return [...new Set(MATCHES.map(m=>m.grp))].sort();}
@@ -916,7 +945,7 @@ if(_LOCALHOST && new URLSearchParams(location.search).has("sim")){
     setTab:t=>{tab=t;}, getTab:()=>tab,
     setPlayer:p=>{player=p;}, setResults:r=>{results=r;}, setStoreReady:v=>{storeReady=v;},
     matchLocked, openCount:()=>openMatches().length,
-    setPicks:p=>{picks=p;}, getPicks:()=>picks, jumpToNext, setDirty:d=>{dirty=d;}, setEdit:id=>{editId=id;}, noWrites:()=>{db=null;},
+    setPicks:p=>{picks=p;}, getPicks:()=>picks, jumpToNext, setDirty:d=>{dirty=d;}, setEdit:id=>{editId=id;}, noWrites:()=>{db=null;}, paymentPrompt,
     detach:()=>{ if(unsubKv){try{unsubKv();}catch(e){}} unsubKv=null; },   // isolate from the live DB
     clearCache:()=>{ for(const k in cache) delete cache[k]; }
   };
