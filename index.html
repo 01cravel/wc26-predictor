@@ -746,15 +746,16 @@ async function renderTable(){
   let rank=0,prev=null;
   rows.forEach((r,i)=>{
     if(r.tot!==prev){rank=i+1;prev=r.tot;}
-    // No medals or winner styling until there are points — just a clean alphabetical list.
-    const cls=anyResults&&rank<=3?" r"+rank:"";
-    const medal=!anyResults?"·":(rank===1?"🥇":rank===2?"🥈":rank===3?"🥉":"#"+rank);
+    const cls=anyResults&&rank<=2?" r"+rank:"";
+    const medal=!anyResults?"·":(rank===1?"🥇":rank===2?"🥈":"");
+    const prize=rank===1?" <b>£72</b>":rank===2?" <b>£18</b>":"";
+    const divider=anyResults&&rank===3?'<div style="height:1px;border-top:1px dotted var(--line1);margin:8px 0;opacity:.5"></div>':"";
     const formHtml=(anyResults&&r.form.length)
       ? '<div class="form">'+r.form.slice(-8).map(s=>'<span class="fd '+(s===3?'f3':s===1?'f1':'f0')+'" title="'+(s===3?'+3 exact':s===1?'+1 result':'0 pts')+'"></span>').join('')+'</div>'
       : '';
-    h+='<div class="lb-card'+cls+'">'
+    h+=divider+'<div class="lb-card'+cls+'">'
       +'<div class="rk">'+medal+'</div>'
-      +'<div class="nm">'+r.n+'<span class="sub" style="display:block">'+(anyResults?(r.exact+' exact · '+r.correct+' result · '+r.played+' scored'):(r.made+' / '+MATCHES.length+' picks made'))+'</span>'+formHtml+'</div>'
+      +'<div class="nm">'+r.n+prize+'<span class="sub" style="display:block">'+(anyResults?(r.exact+' exact · '+r.correct+' result · '+r.played+' scored'):(r.made+' / '+MATCHES.length+' picks made'))+'</span>'+formHtml+'</div>'
       +'<div class="tot">'+r.tot+'<small>POINTS</small></div></div>';
   });
   view.innerHTML=h;
