@@ -172,6 +172,8 @@
   .lb-card .sub{font-size:11px;color:var(--mut);font-weight:400}
   .paidbadge{font-size:9px;font-weight:800;letter-spacing:.5px;color:var(--gold);background:rgba(255,203,43,.14);
     border:1px solid rgba(255,203,43,.4);border-radius:20px;padding:2px 7px;vertical-align:middle;white-space:nowrap}
+  .prizebadge{font-size:12px;font-weight:800;color:var(--green);background:rgba(34,197,94,.14);
+    border:1px solid rgba(34,197,94,.4);border-radius:20px;padding:3px 9px;vertical-align:middle;white-space:nowrap;margin-left:8px}
   .lb-card .form{display:flex;gap:4px;margin-top:6px}
   .lb-card .fd{width:9px;height:9px;border-radius:50%}
   .lb-card .fd.f3{background:var(--green)} .lb-card .fd.f1{background:var(--gold)} .lb-card .fd.f0{background:var(--red)}
@@ -491,7 +493,8 @@ async function goNames(){
   view.innerHTML='<div class="panel"><h2>Who are you?</h2><p>Pick your name, set a 4-digit PIN, then make your predictions. Your PIN stops anyone else editing your picks — and this device stays signed in as you.</p><div class="names" id="names"></div></div>';
   const done = await whoHasSaved();
   const box=el("names");
-  PLAYERS.forEach(n=>{
+  const paid = await loadPaid();
+  PLAYERS.filter(n=>paid.includes(nameKey(n))).forEach(n=>{
     const b=document.createElement("button");
     b.className="name-btn"+(done.has(n)?" done":"");
     const tick = done.has(n)?'<span class="tick">✓ in</span>':'';
@@ -748,7 +751,7 @@ async function renderTable(){
     if(r.tot!==prev){rank=i+1;prev=r.tot;}
     const cls=anyResults&&rank<=2?" r"+rank:"";
     const medal=!anyResults?"·":(rank===1?"🥇":rank===2?"🥈":"");
-    const prize=rank===1?" <b>£72</b>":rank===2?" <b>£18</b>":"";
+    const prize=rank===1?'<span class="prizebadge">£72</span>':rank===2?'<span class="prizebadge">£18</span>':"";
     const divider=anyResults&&rank===3?'<div style="height:1px;border-top:1px dotted var(--line1);margin:8px 0;opacity:.5"></div>':"";
     const formHtml=(anyResults&&r.form.length)
       ? '<div class="form">'+r.form.slice(-8).map(s=>'<span class="fd '+(s===3?'f3':s===1?'f1':'f0')+'" title="'+(s===3?'+3 exact':s===1?'+1 result':'0 pts')+'"></span>').join('')+'</div>'
