@@ -118,7 +118,11 @@ async function run(){
   const S=win.__sim;
   S.detach(); S.clearCache();
   const doc=iframe.contentDocument;
-  const realNow=win.Date.now;
+  // Pin a virtual "today" BEFORE any game so the pre-tournament assertions hold regardless of the
+  // real calendar date (the group stage is now over in real life). Time-travel overrides below
+  // still work; restoring to realNow returns to this pre-tournament instant.
+  const realNow=()=>Date.parse('2026-06-10T12:00:00Z');
+  win.Date.now=realNow;
 
   const { MATCHES, PLAYERS, slug, scoreFor } = S;
 
@@ -216,14 +220,17 @@ async function run(){
   // ---- mid-tournament: per-game locking (some open, some locked) ----
   group('Per-game locking mid-tournament (clock → 20 Jun 2026)');
   const MONS={Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
-  const refLockTs=day=>{const p=day.trim().split(/\s+/);return Date.UTC(2026,MONS[p[2]],+p[1],-1,0,0);}; // 00:00 +01:00
+  // Independent lock reference: knockout ties lock at their actual UK kickoff (matching the app's
+  // explicit lock); group games lock at midnight of their matchday.
+  const KO_LOCK={k80:Date.parse('2026-07-01T16:00:00Z'),k83:Date.parse('2026-07-02T23:00:00Z'),k86:Date.parse('2026-07-03T22:00:00Z')};
+  const refLockTs=m=>KO_LOCK[m.id]!==undefined?KO_LOCK[m.id]:(()=>{const p=m.day.trim().split(/\s+/);return Date.UTC(2026,MONS[p[2]],+p[1],-1,0,0);})(); // 00:00 +01:00
   const mid=Date.parse('2026-06-20T12:00:00+01:00');
   win.Date.now=()=>mid;
-  const expLocked=MATCHES.filter(m=>mid>=refLockTs(m.day)).length;
+  const expLocked=MATCHES.filter(m=>mid>=refLockTs(m)).length;
   const appLocked=MATCHES.filter(m=>S.matchLocked(m)).length;
   check('App lock-count matches independent date math', appLocked===expLocked, appLocked+' locked (exp '+expLocked+')');
   check('Some open, some locked', appLocked>0 && appLocked<MATCHES.length, appLocked+'/'+MATCHES.length+' locked');
-  const midResults={}; MATCHES.forEach(m=>{ if(mid>=refLockTs(m.day)) midResults[m.id]=results[m.id]; });  // only played (locked) games have results
+  const midResults={}; MATCHES.forEach(m=>{ if(mid>=refLockTs(m)) midResults[m.id]=results[m.id]; });  // only played (locked) games have results
   S.cache['wc26:results']=JSON.stringify(midResults);
   S.setTab('picks'); S.render(); await settle(doc);
   const revealedCards=[...doc.querySelectorAll('.pk')].filter(pk=>pk.querySelector('.pv')).length;
@@ -257,8 +264,8 @@ async function run(){
   S.setPicks({}); S.setDirty(false); S.setEdit(null);
 
   // ---- post-tournament: everything locked ----
-  group('Post-tournament (clock → 1 Jul 2026 — all locked)');
-  const future=Date.parse('2026-07-01T12:00:00Z');
+  group('Post-tournament (clock → 4 Jul 2026 — all locked)');
+  const future=Date.parse('2026-07-04T12:00:00Z');   // after the last KO kickoff (3 Jul 23:00 UK)
   win.Date.now=()=>future;
   S.setTab('picks'); const tp=performance.now(); S.render(); await settle(doc); const allPicksMs=performance.now()-tp;
   const pkCards=doc.querySelectorAll('.pk').length;
@@ -304,7 +311,7 @@ async function run(){
 
   // ---- crowd favourite & form guide (controlled scenario) ----
   group('Crowd favourite & form guide');
-  win.Date.now=()=>Date.parse('2026-07-01T12:00:00Z');   // all games revealed
+  win.Date.now=()=>Date.parse('2026-07-04T12:00:00Z');   // all games revealed (after last KO kickoff)
   S.clearCache();
   const mids=MATCHES.map(m=>m.id);
   const mkP=p=>JSON.stringify({pin:'h',picks:p});
@@ -330,7 +337,7 @@ async function run(){
 
   // ---- hardening: malicious / junk scores are sanitised (stored-XSS defence) ----
   group('Hardening: scores sanitised on render');
-  win.Date.now=()=>Date.parse('2026-07-01T12:00:00Z');   // all games revealed
+  win.Date.now=()=>Date.parse('2026-07-04T12:00:00Z');   // all games revealed (after last KO kickoff)
   S.clearCache(); S.setResults({}); S.cache['wc26:results']='{}';
   S.cache[slug('Andy Mathews')]=JSON.stringify({pin:'h',picks:{
     [MATCHES[0].id]:{h:'<img src=x onerror=window.__pwned=1>',a:2},   // injection attempt
@@ -356,12 +363,13 @@ async function run(){
   win.Date.now=realNow;                 // every game open today
   S.noWrites();                         // saves become no-ops — never touch the live DB
   S.setPlayer(valid[0].name); S.setEdit(null);
-  const partial={}; MATCHES.slice(0,6).forEach(m=>partial[m.id]={h:1,a:0});   // 6 of 10 done -> 4 left
+  const partial={}; MATCHES.slice(0,6).forEach(m=>partial[m.id]={h:1,a:0});   // 6 predicted -> rest still to go
   S.setPicks(partial); S.setTab('predict'); S.render(); await settle(doc);
   doc.getElementById('saveBtn').click(); await settle(doc);
   const mc=()=>doc.getElementById('modalCard').textContent;
   check('Warns when not all games are predicted', doc.getElementById('modal').classList.contains('show') && /still to go/.test(mc()));
-  check('States the correct number left', (mc().match(/(\d+) still to go/)||[])[1]==='4', 'says "'+(mc().match(/\d+ still to go/)||['?'])[0]+'"');
+  const expLeft=String(MATCHES.length-6);
+  check('States the correct number left', (mc().match(/(\d+) still to go/)||[])[1]===expLeft, 'says "'+(mc().match(/\d+ still to go/)||['?'])[0]+'" (exp '+expLeft+')');
   check('Offers two choices (finish now / save later)', !!doc.getElementById('modalBtn') && !!doc.getElementById('modalBtn2'));
   doc.getElementById('modalBtn').click(); await settle(doc);    // "Continue and do it now"
   check('Continue closes the warning without saving', !doc.getElementById('modal').classList.contains('show'));
