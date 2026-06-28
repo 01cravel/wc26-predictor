@@ -207,7 +207,7 @@
   <header>
     <div class="hd-row">
       <div class="badge">🏆</div>
-      <div class="ttl"><b>PREDICTOR '26</b><span>World Cup &middot; 10 Top Games</span></div>
+      <div class="ttl"><b>PREDICTOR '26</b><span>World Cup &middot; 13 Top Games</span></div>
       <div class="who" id="whoBox"></div>
     </div>
     <div class="deadline" id="deadline"></div>
@@ -305,8 +305,13 @@ const F = { // flag emoji
  "Argentina":"🇦🇷","Algeria":"🇩🇿","Austria":"🇦🇹","Jordan":"🇯🇴","Portugal":"🇵🇹","DR Congo":"🇨🇩",
  "England":"🏴󠁧󠁢󠁥󠁮󠁧󠁿","Croatia":"🇭🇷","Ghana":"🇬🇭","Panama":"🇵🇦","Uzbekistan":"🇺🇿","Colombia":"🇨🇴"};
 
-// The 10 standout fixtures of the group stage (the England & Scotland games + heavyweight clashes).
-// [id, group, dayLabel, ukTime, home, away]
+// The 10 standout fixtures of the group stage (the England & Scotland games + heavyweight clashes),
+// followed by 3 hand-picked Round-of-32 knockout ties. Knockout games are predicted on the
+// 90-MINUTE score (draws still valid), so the normal 3/1/0 scoring applies unchanged.
+// [id, group, dayLabel, ukTime, home, away, stage?, lockISO?]
+//   stage   — "r32" marks a knockout tie (defaults to group). Drives the round label + filter.
+//   lockISO — explicit lock instant; KO picks lock at actual UK kickoff (the midnight-of-matchday
+//             rule would tie/precede kickoff for the 00:00 Portugal game), group games omit it.
 const RAW = [
  ["m6","C","Sat 13 Jun","11:00pm","Brazil","Morocco"],
  ["m17","I","Tue 16 Jun","8:00pm","France","Senegal"],
@@ -318,6 +323,9 @@ const RAW = [
  ["m61","I","Fri 26 Jun","8:00pm","Norway","France"],
  ["m64","H","Sat 27 Jun","1:00am","Uruguay","Spain"],
  ["m69","K","Sun 28 Jun","12:30am","Colombia","Portugal"],
+ ["k80","R32","Wed 1 Jul","5:00pm","England","DR Congo","r32","2026-07-01T16:00:00Z"],
+ ["k83","R32","Fri 3 Jul","12:00am","Portugal","Croatia","r32","2026-07-02T23:00:00Z"],
+ ["k86","R32","Fri 3 Jul","11:00pm","Argentina","Cape Verde","r32","2026-07-03T22:00:00Z"],
 ];
 // Each pick stays editable until the START of its own matchday (UK), then locks.
 const MONTHS={Jan:"01",Feb:"02",Mar:"03",Apr:"04",May:"05",Jun:"06",Jul:"07",Aug:"08",Sep:"09",Oct:"10",Nov:"11",Dec:"12"};
@@ -326,7 +334,11 @@ function dayLockTs(dayLabel){
   const dd=String(parseInt(p[1],10)).padStart(2,"0");
   return new Date("2026-"+MONTHS[p[2]]+"-"+dd+"T00:00:00+01:00").getTime();  // midnight UK (BST) of matchday
 }
-const MATCHES = RAW.map(r=>({id:r[0],grp:r[1],day:r[2],time:r[3],h:r[4],a:r[5],hf:F[r[4]]||"🏳️",af:F[r[5]]||"🏳️",lockTs:dayLockTs(r[2])}));
+const MATCHES = RAW.map(r=>({id:r[0],grp:r[1],day:r[2],time:r[3],h:r[4],a:r[5],stage:r[6]||"group",
+  hf:F[r[4]]||"🏳️",af:F[r[5]]||"🏳️",lockTs:r[7]?new Date(r[7]).getTime():dayLockTs(r[2])}));
+// Round/group chip + filter labels (knockout ties read "ROUND OF 32" / "Knockouts").
+const stageLabel = m => m.stage==="r32" ? "ROUND OF 32" : "GROUP "+m.grp;
+const gLabel = g => g==="R32" ? "Knockouts" : "Grp "+g;
 
 // per-match locking — a pick locks once its matchday has begun
 const matchLocked = m => Date.now() >= m.lockTs;
@@ -571,11 +583,13 @@ function enterPredict(){
     return;
   }
   tab="predict";jumpPending=true;setNav();render();
-  if(!seenFlag("wc26:seenPredictIntro")){           // first time: welcome, then the payment prompt
+  if(!seenFlag("wc26:seenPredictIntro")){           // first time: welcome (covers the KO games already)
     markFlag("wc26:seenPredictIntro");
     showModal({ico:'⚽',title:'Predict the scores',
-      body:"We've hand-picked the 10 standout games of the World Cup group stage. Set your predicted score for each one, then save your picks. Good luck!",
+      body:"We've hand-picked the standout games of the World Cup — the 10 group-stage clashes plus 3 knockout ties. Set your predicted score for each one, then save your picks.<br><br>Knockout games are scored on the result after <b>90 minutes</b> (extra time doesn't count). Good luck!",
       btn:"Let's go"});
+  } else {                                           // returning player: nudge them to the new KO games
+    newGamesPrompt();
   }
   // else{
   //   paymentPrompt();
@@ -597,7 +611,7 @@ function renderPredict(){
   if(!player){goNames();return;}
   syncSavebar();
   let h='<div class="filterbar" id="fbar"><button data-g="ALL" class="'+(groupFilter==="ALL"?"on":"")+'">All games</button>';
-  groupsPresent().forEach(g=>h+='<button data-g="'+g+'" class="'+(groupFilter===g?"on":"")+'">Grp '+g+'</button>');
+  groupsPresent().forEach(g=>h+='<button data-g="'+g+'" class="'+(groupFilter===g?"on":"")+'">'+gLabel(g)+'</button>');
   h+='</div>';
 
   const list=MATCHES.filter(m=>groupFilter==="ALL"||m.grp===groupFilter);
@@ -615,6 +629,35 @@ function renderPredict(){
   wireSteppers();   // only wires open (unlocked) cards
   updateProgress();
   if(jumpPending){jumpPending=false;jumpToNext(true);}
+}
+
+// Scroll to the first new (knockout) game still open & unpredicted — driven by the login banner.
+function jumpToNewGames(){
+  if(groupFilter!=="ALL"){groupFilter="ALL";renderPredict();}
+  const next = MATCHES.find(m=>m.stage==="r32" && !matchLocked(m) && !picks[m.id])
+            || MATCHES.find(m=>m.stage==="r32");
+  if(!next) return;
+  const card=view.querySelector('.m[data-id="'+next.id+'"]');
+  if(card){
+    card.scrollIntoView({behavior:"smooth",block:"center"});
+    card.classList.add("flashcard");setTimeout(()=>card.classList.remove("flashcard"),1200);
+  }
+}
+
+// Full-screen nudge (like the payment reminder) for returning players who still have
+// newly-added knockout games to predict. Fires on login, every time, until they're done.
+function newGamesPrompt(){
+  const newOpen=MATCHES.filter(m=>m.stage==="r32" && !matchLocked(m) && !picks[m.id]).length;
+  if(newOpen<=0) return;
+  const plural=newOpen>1;
+  showModal({
+    ico:'🆕',
+    title:newOpen+(plural?' new games to predict!':' new game to predict!'),
+    body:(plural?newOpen+' knockout ties have':'A knockout tie has')+" been added to the predictor. Predict the <b>90-minute</b> score for each one — extra time doesn't count. Good luck!",
+    btn:plural?'Predict them →':'Predict it →',
+    onClose:jumpToNewGames,
+    btn2:"I'll do it later"
+  });
 }
 
 // Scroll to the first still-open game you haven't predicted yet.
@@ -656,7 +699,7 @@ function matchCard(m,hv,av,locked,res,pred){
     : staticVal(v);
 
   return '<div class="m'+(locked?' locked':'')+(res?' scored':'')+(isSet?' set':'')+(collapsed?' done':'')+'" data-id="'+m.id+'">'
-    +'<div class="meta"><span class="grp">GROUP '+m.grp+'</span><span>'+metaRight+'</span></div>'
+    +'<div class="meta"><span class="grp">'+stageLabel(m)+'</span><span>'+metaRight+'</span></div>'
     +'<div class="teams">'
       +'<div class="trow"><span class="fl">'+m.hf+'</span><span class="nm">'+m.h+'</span>'+ctrl("h",hv)+'</div>'
       +'<div class="trow"><span class="fl">'+m.af+'</span><span class="nm">'+m.a+'</span>'+ctrl("a",av)+'</div>'
@@ -820,7 +863,7 @@ async function renderResults(){
 }
 function resultsListHtml(editable){
   let h='<div class="filterbar" id="fbar"><button data-g="ALL" class="'+(groupFilter==="ALL"?"on":"")+'">All</button>';
-  groupsPresent().forEach(g=>h+='<button data-g="'+g+'" class="'+(groupFilter===g?"on":"")+'">Grp '+g+'</button>');
+  groupsPresent().forEach(g=>h+='<button data-g="'+g+'" class="'+(groupFilter===g?"on":"")+'">'+gLabel(g)+'</button>');
   h+='</div>';
   const list=MATCHES.filter(m=>groupFilter==="ALL"||m.grp===groupFilter);
   let lastDay="";
@@ -829,7 +872,7 @@ function resultsListHtml(editable){
     const r=results[m.id];const hv=r?r.h:0,av=r?r.a:0;
     const ctrl=(side,v)=> editable ? stepper(side,v) : '<span class="sval">'+(r?v:'–')+'</span>';
     h+='<div class="m'+(r?' scored':'')+'" data-id="'+m.id+'">'
-      +'<div class="meta"><span class="grp">GROUP '+m.grp+'</span><span>'+(r?'✓ result in':m.time+' UK')+'</span></div>'
+      +'<div class="meta"><span class="grp">'+stageLabel(m)+'</span><span>'+(r?'✓ result in':m.time+' UK')+'</span></div>'
       +'<div class="teams">'
         +'<div class="trow"><span class="fl">'+m.hf+'</span><span class="nm">'+m.h+'</span>'+ctrl("h",hv)+'</div>'
         +'<div class="trow"><span class="fl">'+m.af+'</span><span class="nm">'+m.a+'</span>'+ctrl("a",av)+'</div>'
@@ -852,7 +895,7 @@ async function renderPicks(){
 
   let h='<div class="r-note" style="margin-bottom:14px">Everyone\'s picks for a game stay hidden until that game\'s <b>matchday</b> — no peeking, no copying. They reveal here automatically once each game locks.</div>';
   h+='<div class="filterbar" id="fbar"><button data-g="ALL" class="'+(groupFilter==="ALL"?"on":"")+'">All games</button>';
-  groupsPresent().forEach(g=>h+='<button data-g="'+g+'" class="'+(groupFilter===g?"on":"")+'">Grp '+g+'</button>');
+  groupsPresent().forEach(g=>h+='<button data-g="'+g+'" class="'+(groupFilter===g?"on":"")+'">'+gLabel(g)+'</button>');
   h+='</div>';
   const list=MATCHES.filter(m=>groupFilter==="ALL"||m.grp===groupFilter);
   let lastDay="";
@@ -861,7 +904,7 @@ async function renderPicks(){
     const r=results[m.id];
     const locked=matchLocked(m);
     const scHtml=r?'<span class="sc">'+r.h+' – '+r.a+'</span>':(locked?'<span class="sc tbd">not played</span>':'<span class="sc tbd">'+m.time+'</span>');
-    h+='<div class="pk"><div class="top"><span class="grp">GRP '+m.grp+'</span>'
+    h+='<div class="pk"><div class="top"><span class="grp">'+(m.stage==="r32"?"R32":"GRP "+m.grp)+'</span>'
       +'<span class="fl">'+m.hf+'</span><span class="nm">'+m.h+'</span>'
       +'<span class="muted" style="font-size:11px">v</span>'
       +'<span class="fl">'+m.af+'</span><span class="nm">'+m.a+'</span>'
