@@ -201,6 +201,11 @@
   .filterbar button{flex:none;background:var(--card2);border:1px solid var(--line);color:var(--mut);
     border-radius:20px;padding:6px 13px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Archivo'}
   .filterbar button.on{background:var(--cyan);color:#042029;border-color:var(--cyan)}
+
+  /* knockout-only rule reminder pill */
+  .m .meta .metaL{display:inline-flex;align-items:center}
+  .minpill{font-size:9px;font-weight:800;letter-spacing:.5px;color:var(--gold);white-space:nowrap;
+    background:rgba(255,203,43,.14);border:1px solid rgba(255,203,43,.4);border-radius:20px;padding:2px 7px;margin-left:7px}
 </style>
 
 <div class="wrap">
@@ -698,8 +703,9 @@ function matchCard(m,hv,av,locked,res,pred){
     : (!isSet && !editable) ? '<span class="nopick">–</span>'
     : staticVal(v);
 
+  const koPill = m.stage==="r32" ? '<span class="minpill">90 MIN RESULT</span>' : '';
   return '<div class="m'+(locked?' locked':'')+(res?' scored':'')+(isSet?' set':'')+(collapsed?' done':'')+'" data-id="'+m.id+'">'
-    +'<div class="meta"><span class="grp">'+stageLabel(m)+'</span><span>'+metaRight+'</span></div>'
+    +'<div class="meta"><span class="metaL"><span class="grp">'+stageLabel(m)+'</span>'+koPill+'</span><span>'+metaRight+'</span></div>'
     +'<div class="teams">'
       +'<div class="trow"><span class="fl">'+m.hf+'</span><span class="nm">'+m.h+'</span>'+ctrl("h",hv)+'</div>'
       +'<div class="trow"><span class="fl">'+m.af+'</span><span class="nm">'+m.a+'</span>'+ctrl("a",av)+'</div>'
@@ -872,7 +878,7 @@ function resultsListHtml(editable){
     const r=results[m.id];const hv=r?r.h:0,av=r?r.a:0;
     const ctrl=(side,v)=> editable ? stepper(side,v) : '<span class="sval">'+(r?v:'–')+'</span>';
     h+='<div class="m'+(r?' scored':'')+'" data-id="'+m.id+'">'
-      +'<div class="meta"><span class="grp">'+stageLabel(m)+'</span><span>'+(r?'✓ result in':m.time+' UK')+'</span></div>'
+      +'<div class="meta"><span class="metaL"><span class="grp">'+stageLabel(m)+'</span>'+(m.stage==="r32"?'<span class="minpill">90 MIN RESULT</span>':'')+'</span><span>'+(r?'✓ result in':m.time+' UK')+'</span></div>'
       +'<div class="teams">'
         +'<div class="trow"><span class="fl">'+m.hf+'</span><span class="nm">'+m.h+'</span>'+ctrl("h",hv)+'</div>'
         +'<div class="trow"><span class="fl">'+m.af+'</span><span class="nm">'+m.a+'</span>'+ctrl("a",av)+'</div>'
