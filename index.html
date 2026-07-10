@@ -168,6 +168,9 @@
   .lb-card .rk{font-family:'Anton';font-size:22px;width:34px;text-align:center;color:var(--mut)}
   .lb-card.r1 .rk{color:var(--gold)} .lb-card.r2 .rk{color:#cfd6e6} .lb-card.r3 .rk{color:#e0863b}
   .lb-card.r1{border-color:rgba(255,203,43,.5);background:linear-gradient(180deg,rgba(255,203,43,.08),var(--card))}
+  /* temporary gold pulse on the top spot after saving picks */
+  @keyframes topGlow{0%,100%{box-shadow:0 0 0 0 rgba(255,203,43,0)}50%{box-shadow:0 0 24px 3px rgba(255,203,43,.6)}}
+  .lb-card.glow-top{animation:topGlow 1.1s ease-in-out 3}
   .lb-card .nm{font-weight:700;font-size:15px;flex:1;min-width:0;display:flex;align-items:center;gap:4px}
   .lb-card .sub{font-size:11px;color:var(--mut);font-weight:400}
   .paidbadge{font-size:9px;font-weight:800;letter-spacing:.5px;color:var(--gold);background:rgba(255,203,43,.14);
@@ -404,6 +407,7 @@ let storeReady=false;     // true once Firestore is connected & syncing
 let unsubKv=null;         // Firestore listener unsubscribe (used by the sim harness)
 let jumpPending=false;    // scroll to next unpicked game on next predict render
 let editId=null;          // the one predict card currently expanded with +/- steppers
+let glowTop=false;        // scroll to top & pulse the #1 spot on the next leaderboard render
 
 const el=id=>document.getElementById(id);
 const view=el("view");
@@ -773,7 +777,7 @@ async function saveMine(){
       title:'Thanks!',
       body:'Your predictions have been saved. You can edit these at any time up until the day before kickoff.',
       btn:'View leaderboard →',
-      onClose:()=>{ tab="table"; groupFilter="ALL"; render(); }
+      onClose:()=>{ tab="table"; groupFilter="ALL"; glowTop=true; render(); }
     });
   } else flash("⚠️ Couldn't save — check your connection and try again");
 }
@@ -826,6 +830,13 @@ async function renderTable(){
       +'<div class="tot">'+r.tot+'<small>POINTS</small></div></div>';
   });
   view.innerHTML=h;
+  // Just came from saving picks → jump to the top of the table and pulse the #1 spot.
+  if(glowTop){
+    glowTop=false;
+    window.scrollTo(0,0);                              // anchor to the top of the table
+    const top=view.querySelector('.lb-card');
+    if(top){ top.classList.add("glow-top"); setTimeout(()=>top.classList.remove("glow-top"),3600); }
+  }
 }
 
 /* ---------------- VIEW: results entry (admin-locked) ---------------- */
@@ -1026,7 +1037,7 @@ if(_LOCALHOST && new URLSearchParams(location.search).has("sim")){
     setTab:t=>{tab=t;}, getTab:()=>tab,
     setPlayer:p=>{player=p;}, setResults:r=>{results=r;}, setStoreReady:v=>{storeReady=v;},
     matchLocked, openCount:()=>openMatches().length,
-    setPicks:p=>{picks=p;}, getPicks:()=>picks, jumpToNext, setDirty:d=>{dirty=d;}, setEdit:id=>{editId=id;}, noWrites:()=>{db=null;}, paymentPrompt, newGamesPrompt, enterPredict,
+    setPicks:p=>{picks=p;}, getPicks:()=>picks, jumpToNext, setDirty:d=>{dirty=d;}, setEdit:id=>{editId=id;}, setGlowTop:v=>{glowTop=v;}, noWrites:()=>{db=null;}, paymentPrompt, newGamesPrompt, enterPredict,
     detach:()=>{ if(unsubKv){try{unsubKv();}catch(e){}} unsubKv=null; },   // isolate from the live DB
     clearCache:()=>{ for(const k in cache) delete cache[k]; }
   };
