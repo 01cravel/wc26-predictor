@@ -212,7 +212,7 @@
   <header>
     <div class="hd-row">
       <div class="badge">🏆</div>
-      <div class="ttl"><b>PREDICTOR '26</b><span>World Cup &middot; 13 Top Games</span></div>
+      <div class="ttl"><b>PREDICTOR '26</b><span>World Cup &middot; 15 Top Games</span></div>
       <div class="who" id="whoBox"></div>
     </div>
     <div class="deadline" id="deadline"></div>
@@ -311,12 +311,12 @@ const F = { // flag emoji
  "England":"🏴󠁧󠁢󠁥󠁮󠁧󠁿","Croatia":"🇭🇷","Ghana":"🇬🇭","Panama":"🇵🇦","Uzbekistan":"🇺🇿","Colombia":"🇨🇴"};
 
 // The 10 standout fixtures of the group stage (the England & Scotland games + heavyweight clashes),
-// followed by 3 hand-picked Round-of-32 knockout ties. Knockout games are predicted on the
+// followed by hand-picked knockout ties (3 Round-of-32, then quarter-finals). Knockout games are predicted on the
 // 90-MINUTE score (draws still valid), so the normal 3/1/0 scoring applies unchanged.
-// [id, group, dayLabel, ukTime, home, away, stage?, lockISO?]
-//   stage   — "r32" marks a knockout tie (defaults to group). Drives the round label + filter.
-//   lockISO — explicit lock instant; KO picks lock at actual UK kickoff (the midnight-of-matchday
-//             rule would tie/precede kickoff for the 00:00 Portugal game), group games omit it.
+// [id, group, dayLabel, ukTime, home, away, stage?, koISO?]
+//   stage — "r32" marks a knockout tie (defaults to group). Drives the round label + filter.
+//   koISO — the actual UK kickoff instant. KO picks lock KO_LEAD (2h) before kickoff; group
+//           games omit it and lock at midnight UK of their matchday instead.
 const RAW = [
  ["m6","C","Sat 13 Jun","11:00pm","Brazil","Morocco"],
  ["m17","I","Tue 16 Jun","8:00pm","France","Senegal"],
@@ -331,6 +331,14 @@ const RAW = [
  ["k80","R32","Wed 1 Jul","5:00pm","England","DR Congo","r32","2026-07-01T16:00:00Z"],
  ["k83","R32","Fri 3 Jul","12:00am","Portugal","Croatia","r32","2026-07-02T23:00:00Z"],
  ["k86","R32","Fri 3 Jul","11:00pm","Argentina","Cape Verde","r32","2026-07-03T22:00:00Z"],
+ ["q98","R32","Sat 11 Jul","10:00pm","Norway","England","qf","2026-07-11T21:00:00Z"],
+ ["q99","R32","Sun 12 Jul","2:00am","Argentina","Switzerland","qf","2026-07-12T01:00:00Z"],
+ // ── PLACEHOLDERS — semis & final. Once the bracket is set, swap "TBD" for the teams and
+ //    uncomment to go live. Stage labels/pills/notification already handle "sf" & "final".
+ //    (Kickoff times are placeholders — confirm the UK time for the final before going live.)
+ // ["s1", "R32","Tue 14 Jul","8:00pm","TBD","TBD","sf",   "2026-07-14T19:00:00Z"],
+ // ["s2", "R32","Wed 15 Jul","8:00pm","TBD","TBD","sf",   "2026-07-15T19:00:00Z"],
+ // ["fin","R32","Sun 19 Jul","8:00pm","TBD","TBD","final","2026-07-19T19:00:00Z"],
 ];
 // Each pick stays editable until the START of its own matchday (UK), then locks.
 const MONTHS={Jan:"01",Feb:"02",Mar:"03",Apr:"04",May:"05",Jun:"06",Jul:"07",Aug:"08",Sep:"09",Oct:"10",Nov:"11",Dec:"12"};
@@ -339,10 +347,16 @@ function dayLockTs(dayLabel){
   const dd=String(parseInt(p[1],10)).padStart(2,"0");
   return new Date("2026-"+MONTHS[p[2]]+"-"+dd+"T00:00:00+01:00").getTime();  // midnight UK (BST) of matchday
 }
+const KO_LEAD = 2*60*60*1000;   // KO picks lock this long before kickoff (2 hours)
 const MATCHES = RAW.map(r=>({id:r[0],grp:r[1],day:r[2],time:r[3],h:r[4],a:r[5],stage:r[6]||"group",
-  hf:F[r[4]]||"🏳️",af:F[r[5]]||"🏳️",lockTs:r[7]?new Date(r[7]).getTime():dayLockTs(r[2])}));
-// Round/group chip + filter labels (knockout ties read "ROUND OF 32" / "Knockouts").
-const stageLabel = m => m.stage==="r32" ? "ROUND OF 32" : "GROUP "+m.grp;
+  hf:F[r[4]]||"🏳️",af:F[r[5]]||"🏳️",lockTs:r[7]?new Date(r[7]).getTime()-KO_LEAD:dayLockTs(r[2])}));
+// A knockout tie is any non-group stage ("r32", "qf", …) — scored on the 90-min result,
+// gets the "90 MIN RESULT" pill, and drives the login "new games" nudge.
+const isKO = m => m.stage!=="group";
+// Round/group chip + filter labels (knockouts read their round / "Knockouts").
+const KO_LABELS = {r32:"ROUND OF 32", qf:"QUARTER-FINAL", sf:"SEMI-FINAL", final:"FINAL"};
+const KO_SHORT  = {r32:"R32", qf:"QF", sf:"SF", final:"FIN"};
+const stageLabel = m => isKO(m) ? (KO_LABELS[m.stage]||"KNOCKOUT") : "GROUP "+m.grp;
 const gLabel = g => g==="R32" ? "Knockouts" : "Grp "+g;
 
 // per-match locking — a pick locks once its matchday has begun
@@ -639,8 +653,8 @@ function renderPredict(){
 // Scroll to the first new (knockout) game still open & unpredicted — driven by the login banner.
 function jumpToNewGames(){
   if(groupFilter!=="ALL"){groupFilter="ALL";renderPredict();}
-  const next = MATCHES.find(m=>m.stage==="r32" && !matchLocked(m) && !picks[m.id])
-            || MATCHES.find(m=>m.stage==="r32");
+  const next = MATCHES.find(m=>isKO(m) && !matchLocked(m) && !picks[m.id])
+            || MATCHES.find(m=>isKO(m));
   if(!next) return;
   const card=view.querySelector('.m[data-id="'+next.id+'"]');
   if(card){
@@ -652,15 +666,16 @@ function jumpToNewGames(){
 // Full-screen nudge (like the payment reminder) for returning players who still have
 // newly-added knockout games to predict. Fires on login, every time, until they're done.
 function newGamesPrompt(){
-  const newOpen=MATCHES.filter(m=>m.stage==="r32" && !matchLocked(m) && !picks[m.id]).length;
+  const newGames=MATCHES.filter(m=>isKO(m) && !matchLocked(m) && !picks[m.id]);
+  const newOpen=newGames.length;
   if(newOpen<=0) return;
   const plural=newOpen>1;
   showModal({
-    ico:'🆕',
-    title:newOpen+(plural?' new games to predict!':' new game to predict!'),
-    body:(plural?newOpen+' knockout ties have':'A knockout tie has')+" been added to the predictor. Predict the <b>90-minute</b> score for each one — extra time doesn't count. Good luck!",
-    btn:plural?'Predict them →':'Predict it →',
-    onClose:jumpToNewGames,
+    ico:'🎯',
+    title:"Let's knock Jonny Wood off the top spot!",
+    body:(plural?"There are <b>"+newOpen+" new games</b>":"There's <b>a new game</b>")+" to predict — get your scores in before they lock.",
+    btn:'Predict',
+    onClose:jumpToNewGames,   // anchor straight down to the new games
     btn2:"I'll do it later"
   });
 }
@@ -703,7 +718,7 @@ function matchCard(m,hv,av,locked,res,pred){
     : (!isSet && !editable) ? '<span class="nopick">–</span>'
     : staticVal(v);
 
-  const koPill = m.stage==="r32" ? '<span class="minpill">90 MIN RESULT</span>' : '';
+  const koPill = isKO(m) ? '<span class="minpill">90 MIN RESULT</span>' : '';
   return '<div class="m'+(locked?' locked':'')+(res?' scored':'')+(isSet?' set':'')+(collapsed?' done':'')+'" data-id="'+m.id+'">'
     +'<div class="meta"><span class="metaL"><span class="grp">'+stageLabel(m)+'</span>'+koPill+'</span><span>'+metaRight+'</span></div>'
     +'<div class="teams">'
@@ -878,7 +893,7 @@ function resultsListHtml(editable){
     const r=results[m.id];const hv=r?r.h:0,av=r?r.a:0;
     const ctrl=(side,v)=> editable ? stepper(side,v) : '<span class="sval">'+(r?v:'–')+'</span>';
     h+='<div class="m'+(r?' scored':'')+'" data-id="'+m.id+'">'
-      +'<div class="meta"><span class="metaL"><span class="grp">'+stageLabel(m)+'</span>'+(m.stage==="r32"?'<span class="minpill">90 MIN RESULT</span>':'')+'</span><span>'+(r?'✓ result in':m.time+' UK')+'</span></div>'
+      +'<div class="meta"><span class="metaL"><span class="grp">'+stageLabel(m)+'</span>'+(isKO(m)?'<span class="minpill">90 MIN RESULT</span>':'')+'</span><span>'+(r?'✓ result in':m.time+' UK')+'</span></div>'
       +'<div class="teams">'
         +'<div class="trow"><span class="fl">'+m.hf+'</span><span class="nm">'+m.h+'</span>'+ctrl("h",hv)+'</div>'
         +'<div class="trow"><span class="fl">'+m.af+'</span><span class="nm">'+m.a+'</span>'+ctrl("a",av)+'</div>'
@@ -910,7 +925,7 @@ async function renderPicks(){
     const r=results[m.id];
     const locked=matchLocked(m);
     const scHtml=r?'<span class="sc">'+r.h+' – '+r.a+'</span>':(locked?'<span class="sc tbd">not played</span>':'<span class="sc tbd">'+m.time+'</span>');
-    h+='<div class="pk"><div class="top"><span class="grp">'+(m.stage==="r32"?"R32":"GRP "+m.grp)+'</span>'
+    h+='<div class="pk"><div class="top"><span class="grp">'+(isKO(m)?KO_SHORT[m.stage]:"GRP "+m.grp)+'</span>'
       +'<span class="fl">'+m.hf+'</span><span class="nm">'+m.h+'</span>'
       +'<span class="muted" style="font-size:11px">v</span>'
       +'<span class="fl">'+m.af+'</span><span class="nm">'+m.a+'</span>'
@@ -1011,7 +1026,7 @@ if(_LOCALHOST && new URLSearchParams(location.search).has("sim")){
     setTab:t=>{tab=t;}, getTab:()=>tab,
     setPlayer:p=>{player=p;}, setResults:r=>{results=r;}, setStoreReady:v=>{storeReady=v;},
     matchLocked, openCount:()=>openMatches().length,
-    setPicks:p=>{picks=p;}, getPicks:()=>picks, jumpToNext, setDirty:d=>{dirty=d;}, setEdit:id=>{editId=id;}, noWrites:()=>{db=null;}, paymentPrompt, enterPredict,
+    setPicks:p=>{picks=p;}, getPicks:()=>picks, jumpToNext, setDirty:d=>{dirty=d;}, setEdit:id=>{editId=id;}, noWrites:()=>{db=null;}, paymentPrompt, newGamesPrompt, enterPredict,
     detach:()=>{ if(unsubKv){try{unsubKv();}catch(e){}} unsubKv=null; },   // isolate from the live DB
     clearCache:()=>{ for(const k in cache) delete cache[k]; }
   };
