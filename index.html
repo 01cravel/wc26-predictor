@@ -122,7 +122,7 @@
   .savebar .inner{display:flex;gap:10px;align-items:center}
   .savebar #nextBtn{flex:none;width:auto;padding-left:18px;padding-right:18px}
   .savebar #saveBtn{flex:1}
-  .m.flashcard{animation:flashcard 1.2s ease}
+  .m.flashcard,.propcard.flashcard{animation:flashcard 1.2s ease}
   @keyframes flashcard{0%,100%{box-shadow:none}45%{border-color:var(--cyan);box-shadow:0 0 0 2px rgba(25,224,255,.45)}}
   .prog{display:flex;align-items:center;gap:10px;margin-bottom:9px;padding:0 2px}
   .prog-track{flex:1;height:8px;border-radius:20px;background:var(--card2);border:1px solid var(--line);overflow:hidden}
@@ -720,10 +720,26 @@ function jumpToNewGames(){
             || MATCHES.find(m=>isKO(m));
   if(!next) return;
   const card=view.querySelector('.m[data-id="'+next.id+'"]');
-  if(card){
-    card.scrollIntoView({behavior:"smooth",block:"center"});
-    card.classList.add("flashcard");setTimeout(()=>card.classList.remove("flashcard"),1200);
+  if(!card) return;
+  if(next.stage==="final"){
+    // Score card + its two bonus cards, as one group — fit all three in view together where possible.
+    const group=[card,...view.querySelectorAll('.propcard')];
+    flashGroup(group);
+    return;
   }
+  card.scrollIntoView({behavior:"smooth",block:"center"});
+  card.classList.add("flashcard");setTimeout(()=>card.classList.remove("flashcard"),1200);
+}
+// Scroll so every card in the group is visible together — centred if they fit the viewport,
+// else anchored near the top (clear of the sticky header) so at least the first is fully shown.
+function flashGroup(cards){
+  const first=cards[0], last=cards[cards.length-1];
+  const top=first.getBoundingClientRect().top+window.scrollY;
+  const bottom=last.getBoundingClientRect().bottom+window.scrollY;
+  const height=bottom-top, vh=window.innerHeight;
+  const target = height<=vh ? top-(vh-height)/2 : top-70;
+  window.scrollTo({top:Math.max(0,target),behavior:"smooth"});
+  cards.forEach(c=>{c.classList.add("flashcard");setTimeout(()=>c.classList.remove("flashcard"),1200);});
 }
 
 // Full-screen nudge (like the payment reminder) for returning players who still have
