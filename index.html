@@ -129,14 +129,14 @@
   .prog-fill{height:100%;width:0;border-radius:20px;background:linear-gradient(90deg,var(--cyan),var(--green));transition:width .25s}
   .prog-txt{font-family:'Anton';font-size:13px;color:var(--txt);letter-spacing:.5px;flex:none;min-width:54px;text-align:right}
 
-  .pk{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:11px 12px;margin-bottom:10px}
-  .pk .top{display:flex;align-items:center;gap:8px;margin-bottom:9px}
-  .pk .top .fl{font-size:18px}
-  .pk .top .nm{font-size:13px;font-weight:700}
-  .pk .top .sc{margin-left:auto;font-family:'Anton';font-size:18px;color:var(--txt);background:var(--ink2);
+  .pk,.propreveal{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:11px 12px;margin-bottom:10px}
+  .pk .top,.propreveal .top{display:flex;align-items:center;gap:8px;margin-bottom:9px}
+  .pk .top .fl,.propreveal .top .fl{font-size:18px}
+  .pk .top .nm,.propreveal .top .nm{font-size:13px;font-weight:700}
+  .pk .top .sc,.propreveal .top .sc{margin-left:auto;font-family:'Anton';font-size:18px;color:var(--txt);background:var(--ink2);
     border:1px solid var(--line2);border-radius:9px;padding:2px 10px}
-  .pk .top .sc.tbd{color:var(--mut);font-size:11px;font-family:'Archivo';font-weight:700;background:none;border:none;padding:0}
-  .pk .top .grp{font-size:10px;color:var(--cyan);font-weight:800;letter-spacing:.5px}
+  .pk .top .sc.tbd,.propreveal .top .sc.tbd{color:var(--mut);font-size:11px;font-family:'Archivo';font-weight:700;background:none;border:none;padding:0}
+  .pk .top .grp,.propreveal .top .grp{font-size:10px;color:var(--cyan);font-weight:800;letter-spacing:.5px}
   .plist{display:flex;flex-direction:column;gap:5px}
   .pr{display:flex;align-items:center;gap:8px;font-size:13px;padding:4px 0;border-top:1px solid var(--line)}
   .pr .pn{flex:1;color:var(--txt);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -209,13 +209,31 @@
   .m .meta .metaL{display:inline-flex;align-items:center}
   .minpill{font-size:9px;font-weight:800;letter-spacing:.5px;color:var(--gold);white-space:nowrap;
     background:rgba(255,203,43,.14);border:1px solid rgba(255,203,43,.4);border-radius:20px;padding:2px 7px;margin-left:7px}
+
+  /* bonus prop cards (First Goal / Method of Victory) — styled like .m but kept off that
+     class on purpose so they never get swept up by the generic match-card selectors/tests */
+  .propcard{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:11px 12px;margin-bottom:10px}
+  .propcard.locked,.propcard.scored{border-color:var(--line2)}
+  .propcard.set{border-color:rgba(0,224,106,.4)}
+  .propcard.set .stp .val{color:var(--green)}
+  .propcard:not(.set):not(.scored) .stp .val{color:var(--mut)}
+  .propcard .meta{display:flex;justify-content:space-between;font-size:10.5px;color:var(--mut);letter-spacing:.4px;margin-bottom:9px}
+  .propcard .meta .metaL{display:inline-flex;align-items:center}
+  .propcard .grp{color:var(--cyan);font-weight:700}
+  .propq{font-size:13.5px;color:var(--txt);font-weight:600;margin:2px 0 10px;line-height:1.4}
+  .propchoices{display:flex;gap:8px}
+  .pchoice{flex:1;background:var(--card2);border:1px solid var(--line2);color:var(--txt);border-radius:12px;
+    padding:12px 6px;font-size:12.5px;font-weight:800;cursor:pointer;font-family:'Archivo';text-align:center}
+  .pchoice:active{transform:translateY(1px)}
+  .pchoice.on{background:var(--green);color:#06210f;border-color:var(--green)}
+  .pchoice[disabled]{opacity:.65;cursor:default}
 </style>
 
 <div class="wrap">
   <header>
     <div class="hd-row">
       <div class="badge">🏆</div>
-      <div class="ttl"><b>PREDICTOR '26</b><span>World Cup &middot; 15 Top Games</span></div>
+      <div class="ttl"><b>PREDICTOR '26</b><span>World Cup &middot; 16 Top Games</span></div>
       <div class="who" id="whoBox"></div>
     </div>
     <div class="deadline" id="deadline"></div>
@@ -336,12 +354,11 @@ const RAW = [
  ["k86","R32","Fri 3 Jul","11:00pm","Argentina","Cape Verde","r32","2026-07-03T22:00:00Z"],
  ["q98","R32","Sat 11 Jul","10:00pm","Norway","England","qf","2026-07-11T21:00:00Z"],
  ["q99","R32","Sun 12 Jul","2:00am","Argentina","Switzerland","qf","2026-07-12T01:00:00Z"],
- // ── PLACEHOLDERS — semis & final. Once the bracket is set, swap "TBD" for the teams and
- //    uncomment to go live. Stage labels/pills/notification already handle "sf" & "final".
- //    (Kickoff times are placeholders — confirm the UK time for the final before going live.)
+ // ── PLACEHOLDER — semis. Once the bracket is set, swap "TBD" for the teams and
+ //    uncomment to go live. Stage labels/pills/notification already handle "sf".
  // ["s1", "R32","Tue 14 Jul","8:00pm","TBD","TBD","sf",   "2026-07-14T19:00:00Z"],
  // ["s2", "R32","Wed 15 Jul","8:00pm","TBD","TBD","sf",   "2026-07-15T19:00:00Z"],
- // ["fin","R32","Sun 19 Jul","8:00pm","TBD","TBD","final","2026-07-19T19:00:00Z"],
+ ["fin","R32","Sun 19 Jul","8:00pm","Spain","Argentina","final","2026-07-19T19:00:00Z"],
 ];
 // Each pick stays editable until the START of its own matchday (UK), then locks.
 const MONTHS={Jan:"01",Feb:"02",Mar:"03",Apr:"04",May:"05",Jun:"06",Jul:"07",Aug:"08",Sep:"09",Oct:"10",Nov:"11",Dec:"12"};
@@ -367,6 +384,18 @@ const matchLocked = m => Date.now() >= m.lockTs;
 const openMatches = () => MATCHES.filter(m=>!matchLocked(m));
 const nextLockTs  = () => MATCHES.reduce((a,m)=> (!matchLocked(m) && m.lockTs<a) ? m.lockTs : a, Infinity);
 
+// Two bonus prop bets tied to the Final — separate from the score picks above. Each is worth
+// +1 point: "pg" (first goal minute) to whoever's closest to the real minute (ties all score),
+// "pm" (method of victory) to anyone who calls the right one of these three outcomes exactly.
+const PROP_METHODS = ["Normal Time","Extra Time","Penalties"];
+const PROPS = [
+  {id:"pg", q:"⚽ What minute will the first goal be scored?"},
+  {id:"pm", q:"🏆 How will the Final be decided?"},
+];
+const finalMatch = MATCHES.find(m=>m.stage==="final") || null;
+const propsLockTs = finalMatch ? finalMatch.lockTs : Infinity;   // props lock alongside the Final
+const propsLocked = () => Date.now() >= propsLockTs;
+
 /* ---------------- STORAGE (Firestore-backed, live cache) ---------------- */
 function nameKey(n){return (n||"").replace(/[^a-z0-9]/gi,"").toLowerCase();}
 function slug(n){return "wc26:pred:"+nameKey(n);}
@@ -386,6 +415,16 @@ function safeParse(raw,fb){if(raw==null)return fb;try{const v=JSON.parse(raw);re
 function clampScore(n){n=Math.floor(Number(n));return Number.isFinite(n)?Math.max(0,Math.min(20,n)):0;}
 function safeScores(obj){const out={};if(obj&&typeof obj==="object")for(const id in obj){const v=obj[id];if(v&&typeof v==="object")out[id]={h:clampScore(v.h),a:clampScore(v.a)};}return out;}
 function safePicks(d){return safeScores(d&&d.picks);}
+// Same defensive coercion as scores, for the two bonus props: pg (minute, 0-120) and pm (a fixed choice).
+function clampMinute(n){n=Math.floor(Number(n));return Number.isFinite(n)?Math.max(0,Math.min(120,n)):null;}
+function safeProps(obj){
+  const out={pg:null,pm:null};
+  if(obj&&typeof obj==="object"){
+    if(obj.pg!=null){const v=clampMinute(obj.pg);if(v!=null)out.pg=v;}
+    if(PROP_METHODS.includes(obj.pm))out.pm=obj.pm;
+  }
+  return out;
+}
 
 /* ---------------- DEVICE IDENTITY LOCK ----------------
    Once a PIN is set on this device, it stays bound to that one player.
@@ -401,6 +440,8 @@ let tab="predict";
 let player=null;          // current player name
 let picks={};             // {matchId:{h,a}}
 let results={};           // {matchId:{h,a}}
+let propPicks={pg:null,pm:null};     // this player's bonus prop picks
+let propResults={pg:null,pm:null};   // admin-entered actual outcomes for the props
 let groupFilter="ALL";
 let dirty=false;          // unsaved prediction edits since last save
 let storeReady=false;     // true once Firestore is connected & syncing
@@ -419,6 +460,22 @@ function scoreFor(pred,res){
   if(pred.h===res.h&&pred.a===res.a)return 3;
   if(outcome(pred.h,pred.a)===outcome(res.h,res.a))return 1;
   return 0;
+}
+// Prop points depend on the whole field (closest-minute is relative to everyone else's guess),
+// so this takes a list of {n,props} rather than scoring one player in isolation like scoreFor.
+// Returns {name: {pg: 0|1|null, pm: 0|1|null}} — null means that prop's result isn't in yet.
+function computePropPoints(list){
+  let best=Infinity;
+  if(propResults.pg!=null){
+    list.forEach(pl=>{const g=pl.props.pg;if(g!=null){const d=Math.abs(g-propResults.pg);if(d<best)best=d;}});
+  }
+  const out={};
+  list.forEach(pl=>{
+    const pg = propResults.pg==null ? null : ((pl.props.pg!=null && Math.abs(pl.props.pg-propResults.pg)===best)?1:0);
+    const pm = propResults.pm==null ? null : (pl.props.pm===propResults.pm?1:0);
+    out[pl.n]={pg,pm};
+  });
+  return out;
 }
 function initials(n){return n.split(" ").map(w=>w[0]).slice(0,2).join("").toUpperCase();}
 function flash(t){const f=el("flash");f.textContent=t;f.classList.add("show");setTimeout(()=>f.classList.remove("show"),1500);}
@@ -563,7 +620,7 @@ function promptPin(n,data,locked){
     const p=readPin();
     if(p.length<4){el("pinerr").textContent="Enter all 4 digits";return;}
     if(hash(p)!==data.pin){el("pinerr").textContent="Wrong PIN, try again";return;}
-    setMe(n);player=n;picks=safePicks(data);dirty=false;enterPredict();
+    setMe(n);player=n;picks=safePicks(data);propPicks=safeProps(data.props);dirty=false;enterPredict();
   };
 }
 function setupPin(n,locked){
@@ -576,8 +633,8 @@ function setupPin(n,locked){
   el("pinok").onclick=async()=>{
     const p=readPin();
     if(p.length<4){el("pinerr").textContent="Pick a 4-digit PIN";return;}
-    setMe(n);player=n;picks={};dirty=false;
-    const ok=await sSet(slug(n),JSON.stringify({pin:hash(p),picks:{},updated:Date.now()}));
+    setMe(n);player=n;picks={};propPicks={pg:null,pm:null};dirty=false;
+    const ok=await sSet(slug(n),JSON.stringify({pin:hash(p),picks:{},props:{pg:null,pm:null},updated:Date.now()}));
     if(!ok)flash("⚠️ Saved on this device only — check your connection");
     enterPredict();
   };
@@ -609,7 +666,7 @@ function enterPredict(){
   if(!seenFlag("wc26:seenPredictIntro")){           // first time: welcome (covers the KO games already)
     markFlag("wc26:seenPredictIntro");
     showModal({ico:'⚽',title:'Predict the scores',
-      body:"We've hand-picked the standout games of the World Cup — the 10 group-stage clashes plus 3 knockout ties. Set your predicted score for each one, then save your picks.<br><br>Knockout games are scored on the result after <b>90 minutes</b> (extra time doesn't count). Good luck!",
+      body:"We've hand-picked the standout games of the World Cup — the 10 group-stage clashes plus knockout ties all the way to the final. Set your predicted score for each one, then save your picks.<br><br>Knockout games are scored on the result after <b>90 minutes</b> (extra time doesn't count). Good luck!",
       btn:"Let's go"});
   } else {                                           // returning player: nudge them to the new KO games
     newGamesPrompt();
@@ -644,12 +701,14 @@ function renderPredict(){
     const p=picks[m.id];const r=results[m.id];
     const hv=p?p.h:0, av=p?p.a:0;
     h+=matchCard(m,hv,av,matchLocked(m),r,p);
+    if(m.stage==="final") h+=propMinuteCardHtml()+propMethodCardHtml();
   });
   view.innerHTML=h;
 
   el("fbar").querySelectorAll("button").forEach(b=>b.onclick=()=>{groupFilter=b.dataset.g;render();});
   view.querySelectorAll(".editbtn").forEach(b=>b.onclick=()=>{editId=b.dataset.edit;renderPredict();});
   wireSteppers();   // only wires open (unlocked) cards
+  wirePropControls();
   updateProgress();
   if(jumpPending){jumpPending=false;jumpToNext(true);}
 }
@@ -764,11 +823,76 @@ function wireSteppers(){
   });
 }
 
+// The two Final-only bonus prop cards. Kept off the .m class (see the .propcard CSS comment)
+// so they never get caught by the generic match-card queries — wired separately below.
+function propMinuteCardHtml(){
+  const locked=propsLocked(), hasRes=propResults.pg!=null;
+  const v=propPicks.pg, isSet=v!=null;
+  const editable=!locked && !hasRes;
+  let metaRight;
+  if(hasRes) metaRight='<span class="pill res">Actual '+propResults.pg+"'</span>";
+  else if(locked) metaRight=isSet?'🔒 locked':'🔒 no pick';
+  else metaRight=isSet?'<span class="picked">✓ picked</span>':'';
+  const ctrl = editable ? stepper("pg",v??0) : (isSet ? staticVal(v) : '<span class="nopick">–</span>');
+  return '<div class="propcard'+(locked?' locked':'')+(hasRes?' scored':'')+(isSet?' set':'')+'" data-propid="pg">'
+    +'<div class="meta"><span class="metaL"><span class="grp">BONUS</span><span class="minpill">+1 PT</span></span><span>'+metaRight+'</span></div>'
+    +'<div class="propq">'+PROPS[0].q+'</div>'
+    +'<div class="teams"><div class="trow"><span class="nm">Minute</span>'+ctrl+'</div></div>'
+    +'</div>';
+}
+function propMethodCardHtml(){
+  const locked=propsLocked(), hasRes=propResults.pm!=null;
+  const v=propPicks.pm, isSet=v!=null;
+  const editable=!locked && !hasRes;
+  let metaRight;
+  if(hasRes) metaRight='<span class="pill res">Actual: '+propResults.pm+'</span>';
+  else if(locked) metaRight=isSet?'🔒 locked':'🔒 no pick';
+  else metaRight=isSet?'<span class="picked">✓ picked</span>':'';
+  const choices=PROP_METHODS.map(o=>'<button class="pchoice'+(v===o?' on':'')+'" data-v="'+o+'"'+(editable?'':' disabled')+'>'+o+'</button>').join('');
+  return '<div class="propcard'+(locked?' locked':'')+(hasRes?' scored':'')+(isSet?' set':'')+'" data-propid="pm">'
+    +'<div class="meta"><span class="metaL"><span class="grp">BONUS</span><span class="minpill">+1 PT</span></span><span>'+metaRight+'</span></div>'
+    +'<div class="propq">'+PROPS[1].q+'</div>'
+    +'<div class="propchoices">'+choices+'</div>'
+    +'</div>';
+}
+function wirePropControls(){
+  const mCard=view.querySelector('.propcard[data-propid="pg"]:not(.locked):not(.scored)');
+  if(mCard){
+    const stp=mCard.querySelector(".stp");
+    if(stp) stp.querySelectorAll("button").forEach(btn=>{
+      btn.onclick=()=>{
+        if(propPicks.pg==null) propPicks.pg=0;
+        let v=propPicks.pg+(+btn.dataset.d); v=Math.max(0,Math.min(120,v));
+        propPicks.pg=v;
+        stp.querySelector(".val").textContent=v;
+        markPropPicked(mCard);
+        dirty=true;syncSavebar();
+      };
+    });
+  }
+  const cCard=view.querySelector('.propcard[data-propid="pm"]:not(.locked):not(.scored)');
+  if(cCard){
+    cCard.querySelectorAll(".pchoice").forEach(btn=>{
+      btn.onclick=()=>{
+        propPicks.pm=btn.dataset.v;
+        cCard.querySelectorAll(".pchoice").forEach(b=>b.classList.toggle("on",b===btn));
+        markPropPicked(cCard);
+        dirty=true;syncSavebar();
+      };
+    });
+  }
+}
+function markPropPicked(card){
+  card.classList.add("set");
+  const mr=card.querySelector(".meta span:last-child");
+  if(mr)mr.innerHTML='<span class="picked">✓ picked</span>';
+}
+
 async function saveMine(){
   if(!player)return;
   const raw=await sGet(slug(player));
   const data=raw?safeParse(raw,{pin:null,picks:{}}):{pin:null,picks:{}};
-  data.picks=picks;data.updated=Date.now();
+  data.picks=picks;data.props=propPicks;data.updated=Date.now();
   const ok=await sSet(slug(player),JSON.stringify(data));
   if(ok){
     dirty=false;
@@ -788,12 +912,16 @@ async function renderTable(){
   view.innerHTML='<div class="empty">Loading standings…</div>';
   await loadResults();
   const keys=await sList("wc26:pred:");
-  const rows=[];
+  const entries=[];
   for(const n of PLAYERS){
     if(!keys.includes(slug(n)))continue;
     const raw=await sGet(slug(n));if(!raw)continue;
     const d=safeParse(raw,null);if(!d)continue;
-    const dp=safePicks(d);
+    entries.push({n,dp:safePicks(d),dprops:safeProps(d.props)});
+  }
+  const propPts=computePropPoints(entries.map(e=>({n:e.n,props:e.dprops})));
+  const rows=[];
+  for(const {n,dp,dprops} of entries){
     let tot=0,exact=0,correct=0,played=0;const form=[];
     for(const m of MATCHES){
       const s=scoreFor(dp[m.id],results[m.id]);
@@ -801,7 +929,9 @@ async function renderTable(){
       played++;tot+=s;if(s===3)exact++;else if(s===1)correct++;
       form.push(s);                                 // chronological run of scored games
     }
-    rows.push({n,tot,exact,correct,played,made:Object.keys(dp).length,form});
+    const bonus=(propPts[n].pg||0)+(propPts[n].pm||0);
+    tot+=bonus;
+    rows.push({n,tot,exact,correct,played,made:Object.keys(dp).length,form,bonus});
   }
   const anyResults=Object.keys(results).length>0;
   // Until points exist, it's just an alphabetical roster; once results come in, rank by points.
@@ -826,7 +956,7 @@ async function renderTable(){
       : '';
     h+=divider+'<div class="lb-card'+cls+'">'
       +'<div class="rk">'+medal+'</div>'
-      +'<div class="nm">'+r.n+prize+'<span class="sub" style="display:block">'+(anyResults?(r.exact+' exact · '+r.correct+' result · '+r.played+' scored'):(r.made+' / '+MATCHES.length+' picks made'))+'</span>'+formHtml+'</div>'
+      +'<div class="nm">'+r.n+prize+'<span class="sub" style="display:block">'+(anyResults?(r.exact+' exact · '+r.correct+' result · '+r.played+' scored'+(r.bonus?' · +'+r.bonus+' bonus':'')):(r.made+' / '+MATCHES.length+' picks made'))+'</span>'+formHtml+'</div>'
       +'<div class="tot">'+r.tot+'<small>POINTS</small></div></div>';
   });
   view.innerHTML=h;
@@ -891,7 +1021,31 @@ async function renderResults(){
       });
     });
   });
-  el("saveRes").onclick=async()=>{const ok=await sSet("wc26:results",JSON.stringify(results));flash(ok?"✓ Results saved":"⚠️ Couldn't save results — check your connection");};
+  const pgCard=view.querySelector('.propcard[data-propid="pg"]');
+  if(pgCard){
+    const stp=pgCard.querySelector(".stp");
+    if(stp) stp.querySelectorAll("button").forEach(btn=>{
+      btn.onclick=()=>{
+        if(propResults.pg==null) propResults.pg=0;
+        let v=propResults.pg+(+btn.dataset.d);v=Math.max(0,Math.min(120,v));
+        propResults.pg=v;stp.querySelector(".val").textContent=v;
+      };
+    });
+  }
+  const pmCard=view.querySelector('.propcard[data-propid="pm"]');
+  if(pmCard){
+    pmCard.querySelectorAll(".pchoice").forEach(btn=>{
+      btn.onclick=()=>{
+        propResults.pm=btn.dataset.v;
+        pmCard.querySelectorAll(".pchoice").forEach(b=>b.classList.toggle("on",b===btn));
+      };
+    });
+  }
+  el("saveRes").onclick=async()=>{
+    const ok1=await sSet("wc26:results",JSON.stringify(results));
+    const ok2=await sSet("wc26:propresults",JSON.stringify(propResults));
+    flash((ok1&&ok2)?"✓ Results saved":"⚠️ Couldn't save results — check your connection");
+  };
 }
 function resultsListHtml(editable){
   let h='<div class="filterbar" id="fbar"><button data-g="ALL" class="'+(groupFilter==="ALL"?"on":"")+'">All</button>';
@@ -909,21 +1063,39 @@ function resultsListHtml(editable){
         +'<div class="trow"><span class="fl">'+m.hf+'</span><span class="nm">'+m.h+'</span>'+ctrl("h",hv)+'</div>'
         +'<div class="trow"><span class="fl">'+m.af+'</span><span class="nm">'+m.a+'</span>'+ctrl("a",av)+'</div>'
       +'</div></div>';
+    if(m.stage==="final") h+=resultsPropCardsHtml(editable);
   });
   return h;
+}
+function resultsPropCardsHtml(editable){
+  const pg=propResults.pg, pm=propResults.pm;
+  const gCtrl = editable ? stepper("pg",pg??0) : '<span class="sval">'+(pg!=null?pg:'–')+'</span>';
+  const choices = PROP_METHODS.map(o=>'<button class="pchoice'+(pm===o?' on':'')+'" data-v="'+o+'"'+(editable?'':' disabled')+'>'+o+'</button>').join('');
+  return '<div class="propcard'+(pg!=null?' scored':'')+'" data-propid="pg">'
+      +'<div class="meta"><span class="metaL"><span class="grp">BONUS</span><span class="minpill">+1 PT</span></span><span>'+(pg!=null?'✓ result in':'')+'</span></div>'
+      +'<div class="propq">'+PROPS[0].q+'</div>'
+      +'<div class="teams"><div class="trow"><span class="nm">Minute</span>'+gCtrl+'</div></div></div>'
+    +'<div class="propcard'+(pm!=null?' scored':'')+'" data-propid="pm">'
+      +'<div class="meta"><span class="metaL"><span class="grp">BONUS</span><span class="minpill">+1 PT</span></span><span>'+(pm!=null?'✓ result in':'')+'</span></div>'
+      +'<div class="propq">'+PROPS[1].q+'</div>'
+      +'<div class="propchoices">'+choices+'</div></div>';
 }
 function wireResultsFilter(){
   const fb=el("fbar");if(fb)fb.querySelectorAll("button").forEach(b=>b.onclick=()=>{groupFilter=b.dataset.g;render();});
 }
-async function loadResults(){const raw=await sGet("wc26:results");results=safeScores(safeParse(raw,{}));}
+async function loadResults(){
+  const raw=await sGet("wc26:results");results=safeScores(safeParse(raw,{}));
+  const praw=await sGet("wc26:propresults");propResults=safeProps(safeParse(praw,{}));
+}
 
 /* ---------------- VIEW: all picks (each game reveals once it locks) ---------------- */
 async function renderPicks(){
   setSavebarVisible(false);
   view.innerHTML='<div class="empty">Loading everyone\'s picks…</div>';
   await loadResults();
-  const all=await loadAllPicks(); // [{n, picks}]
+  const all=await loadAllPicks(); // [{n, picks, props}]
   if(all.length===0){view.innerHTML='<div class="empty">No predictions submitted yet.</div>';return;}
+  const propPts=computePropPoints(all);
 
   let h='<div class="r-note" style="margin-bottom:14px">Everyone\'s picks for a game stay hidden until that game\'s <b>matchday</b> — no peeking, no copying. They reveal here automatically once each game locks.</div>';
   h+='<div class="filterbar" id="fbar"><button data-g="ALL" class="'+(groupFilter==="ALL"?"on":"")+'">All games</button>';
@@ -955,9 +1127,45 @@ async function renderPicks(){
       });
     }
     h+='</div></div>';
+    if(m.stage==="final") h+=propRevealHtml(all,locked,m.day,propPts);
   });
   view.innerHTML=h;
   el("fbar").querySelectorAll("button").forEach(b=>b.onclick=()=>{groupFilter=b.dataset.g;render();});
+}
+// Reveal block for the two bonus props, matching the .pk reveal pattern above but kept as a
+// separate .propreveal class so it isn't swept into any "count the .pk cards" assertions.
+function propRevealHtml(all,locked,day,propPts){
+  const dayShort=day.replace(/^\w+\s/,"");
+  const hiddenRow='<div class="pr"><span class="miss">🔒 Picks hidden until matchday ('+dayShort+')</span></div>';
+  let h='<div class="propreveal"><div class="top"><span class="grp">BONUS</span><span class="nm">⚽ First Goal Minute</span>'
+    +(propResults.pg!=null?'<span class="sc">'+propResults.pg+"'</span>":'<span class="sc tbd">TBD</span>')
+    +'</div><div class="plist">';
+  if(!locked){ h+=hiddenRow; }
+  else{
+    all.forEach(pl=>{
+      const g=pl.props.pg;
+      if(g==null){h+='<div class="pr"><span class="pn">'+pl.n+'</span><span class="miss">— no pick</span></div>';return;}
+      const pts=propPts[pl.n].pg;
+      const pp=pts==null?'':'<span class="pp '+(pts?'p3':'p0')+'">+'+pts+'</span>';
+      h+='<div class="pr"><span class="pn">'+pl.n+'</span><span class="pv">'+g+"'</span>"+pp+'</div>';
+    });
+  }
+  h+='</div></div>';
+  h+='<div class="propreveal"><div class="top"><span class="grp">BONUS</span><span class="nm">🏆 Method of Victory</span>'
+    +(propResults.pm!=null?'<span class="sc">'+propResults.pm+'</span>':'<span class="sc tbd">TBD</span>')
+    +'</div><div class="plist">';
+  if(!locked){ h+=hiddenRow; }
+  else{
+    all.forEach(pl=>{
+      const g=pl.props.pm;
+      if(g==null){h+='<div class="pr"><span class="pn">'+pl.n+'</span><span class="miss">— no pick</span></div>';return;}
+      const pts=propPts[pl.n].pm;
+      const pp=pts==null?'':'<span class="pp '+(pts?'p3':'p0')+'">+'+pts+'</span>';
+      h+='<div class="pr"><span class="pn">'+pl.n+'</span><span class="pv" style="font-size:13px">'+g+'</span>'+pp+'</div>';
+    });
+  }
+  h+='</div></div>';
+  return h;
 }
 // The group's most popular scoreline for a game.
 function crowdFav(m,all){
@@ -975,7 +1183,7 @@ async function loadAllPicks(){
     if(!keys.includes(slug(n)))continue;
     const raw=await sGet(slug(n));if(!raw)continue;
     const d=safeParse(raw,null);if(!d)continue;
-    out.push({n,picks:safePicks(d)});
+    out.push({n,picks:safePicks(d),props:safeProps(d.props)});
   }
   return out;
 }
