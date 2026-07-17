@@ -227,6 +227,13 @@
   .pchoice:active{transform:translateY(1px)}
   .pchoice.on{background:var(--green);color:#06210f;border-color:var(--green)}
   .pchoice[disabled]{opacity:.65;cursor:default}
+  .minuterow{display:flex;gap:8px;align-items:center;flex:none}
+  .minuteinput{width:64px;height:44px;text-align:center;font-family:'Anton';font-size:19px;color:var(--txt);
+    background:var(--ink2);border:1px solid var(--line2);border-radius:11px;padding:0 4px}
+  .minuteinput:focus{outline:none;border-color:var(--cyan)}
+  .minuteinput::-webkit-inner-spin-button,.minuteinput::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+  .minuteinput[disabled]{opacity:.5}
+  .ngbtn{flex:none;padding:0 14px;height:44px}
 </style>
 
 <div class="wrap">
@@ -415,16 +422,20 @@ function safeParse(raw,fb){if(raw==null)return fb;try{const v=JSON.parse(raw);re
 function clampScore(n){n=Math.floor(Number(n));return Number.isFinite(n)?Math.max(0,Math.min(20,n)):0;}
 function safeScores(obj){const out={};if(obj&&typeof obj==="object")for(const id in obj){const v=obj[id];if(v&&typeof v==="object")out[id]={h:clampScore(v.h),a:clampScore(v.a)};}return out;}
 function safePicks(d){return safeScores(d&&d.picks);}
-// Same defensive coercion as scores, for the two bonus props: pg (minute, 0-120) and pm (a fixed choice).
+// Same defensive coercion as scores, for the two bonus props: pg (minute 0-120, or "NG" for
+// "no goal scored") and pm (a fixed choice).
 function clampMinute(n){n=Math.floor(Number(n));return Number.isFinite(n)?Math.max(0,Math.min(120,n)):null;}
 function safeProps(obj){
   const out={pg:null,pm:null};
   if(obj&&typeof obj==="object"){
-    if(obj.pg!=null){const v=clampMinute(obj.pg);if(v!=null)out.pg=v;}
+    if(obj.pg==="NG")out.pg="NG";
+    else if(obj.pg!=null){const v=clampMinute(obj.pg);if(v!=null)out.pg=v;}
     if(PROP_METHODS.includes(obj.pm))out.pm=obj.pm;
   }
   return out;
 }
+// Display label for a first-goal-minute value — number|"NG"|null.
+function minuteLabel(v){return v==null?null:(v==="NG"?"No goal":v+"'");}
 
 /* ---------------- DEVICE IDENTITY LOCK ----------------
    Once a PIN is set on this device, it stays bound to that one player.
@@ -465,13 +476,18 @@ function scoreFor(pred,res){
 // so this takes a list of {n,props} rather than scoring one player in isolation like scoreFor.
 // Returns {name: {pg: 0|1|null, pm: 0|1|null}} — null means that prop's result isn't in yet.
 function computePropPoints(list){
+  const actual=propResults.pg, actualIsNG=actual==="NG";
   let best=Infinity;
-  if(propResults.pg!=null){
-    list.forEach(pl=>{const g=pl.props.pg;if(g!=null){const d=Math.abs(g-propResults.pg);if(d<best)best=d;}});
+  if(actual!=null && !actualIsNG){
+    list.forEach(pl=>{const g=pl.props.pg;if(typeof g==="number"){const d=Math.abs(g-actual);if(d<best)best=d;}});
   }
   const out={};
   list.forEach(pl=>{
-    const pg = propResults.pg==null ? null : ((pl.props.pg!=null && Math.abs(pl.props.pg-propResults.pg)===best)?1:0);
+    let pg=null;
+    if(actual!=null){
+      const g=pl.props.pg;
+      pg = actualIsNG ? (g==="NG"?1:0) : ((typeof g==="number" && Math.abs(g-actual)===best)?1:0);
+    }
     const pm = propResults.pm==null ? null : (pl.props.pm===propResults.pm?1:0);
     out[pl.n]={pg,pm};
   });
@@ -848,17 +864,27 @@ function wireSteppers(){
 // so they never get caught by the generic match-card queries — wired separately below.
 function propMinuteCardHtml(){
   const locked=propsLocked(), hasRes=propResults.pg!=null;
-  const v=propPicks.pg, isSet=v!=null;
+  const v=propPicks.pg, isSet=v!=null, isNG=v==="NG";
   const editable=!locked && !hasRes;
   let metaRight;
-  if(hasRes) metaRight='<span class="pill res">Actual '+propResults.pg+"'</span>";
+  if(hasRes) metaRight='<span class="pill res">Actual '+minuteLabel(propResults.pg)+'</span>';
   else if(locked) metaRight=isSet?'🔒 locked':'🔒 no pick';
   else metaRight=isSet?'<span class="picked">✓ picked</span>':'';
-  const ctrl = editable ? stepper("pg",v??0) : (isSet ? staticVal(v) : '<span class="nopick">–</span>');
+  const ctrl = editable ? minuteInputHtml(v) : (isSet ? '<span class="sval" style="'+(isNG?'font-size:16px':'')+'">'+minuteLabel(v)+'</span>' : '<span class="nopick">–</span>');
   return '<div class="propcard'+(locked?' locked':'')+(hasRes?' scored':'')+(isSet?' set':'')+'" data-propid="pg">'
     +'<div class="meta"><span class="metaL"><span class="grp">BONUS</span><span class="minpill">+1 PT</span></span><span>'+metaRight+'</span></div>'
     +'<div class="propq">'+PROPS[0].q+'</div>'
     +'<div class="teams"><div class="trow"><span class="nm">Minute</span>'+ctrl+'</div></div>'
+    +'</div>';
+}
+// Number-only minute input + a "No goal" toggle button — shared shape used by the predict card
+// and the admin results-entry card (editable=true in both; read-only elsewhere uses minuteLabel()).
+function minuteInputHtml(v){
+  const isNG=v==="NG";
+  const numVal=(typeof v==="number")?v:"";
+  return '<div class="minuterow">'
+    +'<input type="number" inputmode="numeric" class="minuteinput" min="0" max="120" placeholder="—" value="'+numVal+'"'+(isNG?' disabled':'')+'>'
+    +'<button class="pchoice ngbtn'+(isNG?' on':'')+'">No goal</button>'
     +'</div>';
 }
 function propMethodCardHtml(){
@@ -878,19 +904,8 @@ function propMethodCardHtml(){
 }
 function wirePropControls(){
   const mCard=view.querySelector('.propcard[data-propid="pg"]:not(.locked):not(.scored)');
-  if(mCard){
-    const stp=mCard.querySelector(".stp");
-    if(stp) stp.querySelectorAll("button").forEach(btn=>{
-      btn.onclick=()=>{
-        if(propPicks.pg==null) propPicks.pg=0;
-        let v=propPicks.pg+(+btn.dataset.d); v=Math.max(0,Math.min(120,v));
-        propPicks.pg=v;
-        stp.querySelector(".val").textContent=v;
-        markPropPicked(mCard);
-        dirty=true;syncSavebar();
-      };
-    });
-  }
+  if(mCard) wireMinuteInput(mCard, v=>{propPicks.pg=v;}, ()=>{dirty=true;syncSavebar();},
+    hasVal=>{ hasVal?markPropPicked(mCard):unmarkPropPicked(mCard); });
   const cCard=view.querySelector('.propcard[data-propid="pm"]:not(.locked):not(.scored)');
   if(cCard){
     cCard.querySelectorAll(".pchoice").forEach(btn=>{
@@ -907,6 +922,33 @@ function markPropPicked(card){
   card.classList.add("set");
   const mr=card.querySelector(".meta span:last-child");
   if(mr)mr.innerHTML='<span class="picked">✓ picked</span>';
+}
+function unmarkPropPicked(card){
+  card.classList.remove("set");
+  const mr=card.querySelector(".meta span:last-child");
+  if(mr)mr.innerHTML='';
+}
+// Wires the number input + "No goal" toggle produced by minuteInputHtml(). setValue(number|"NG"|null)
+// stores the pick; onChange runs after every edit; mark(hasValue), if given, drives the "✓ picked"
+// meta text (used on the Predict card, skipped on the admin results card which has no such pill).
+function wireMinuteInput(card, setValue, onChange, mark){
+  const input=card.querySelector(".minuteinput");
+  const ngBtn=card.querySelector(".ngbtn");
+  if(input) input.oninput=()=>{
+    const n=input.value===""?null:Math.max(0,Math.min(120,Math.floor(Number(input.value))||0));
+    setValue(n);
+    if(ngBtn) ngBtn.classList.remove("on");
+    if(mark) mark(n!=null);
+    onChange();
+  };
+  if(ngBtn) ngBtn.onclick=()=>{
+    const turningOn = !ngBtn.classList.contains("on");
+    setValue(turningOn?"NG":null);
+    ngBtn.classList.toggle("on", turningOn);
+    if(input){ input.disabled=turningOn; if(turningOn) input.value=""; }
+    if(mark) mark(turningOn);
+    onChange();
+  };
 }
 
 async function saveMine(){
@@ -1043,16 +1085,7 @@ async function renderResults(){
     });
   });
   const pgCard=view.querySelector('.propcard[data-propid="pg"]');
-  if(pgCard){
-    const stp=pgCard.querySelector(".stp");
-    if(stp) stp.querySelectorAll("button").forEach(btn=>{
-      btn.onclick=()=>{
-        if(propResults.pg==null) propResults.pg=0;
-        let v=propResults.pg+(+btn.dataset.d);v=Math.max(0,Math.min(120,v));
-        propResults.pg=v;stp.querySelector(".val").textContent=v;
-      };
-    });
-  }
+  if(pgCard) wireMinuteInput(pgCard, v=>{propResults.pg=v;}, ()=>{});
   const pmCard=view.querySelector('.propcard[data-propid="pm"]');
   if(pmCard){
     pmCard.querySelectorAll(".pchoice").forEach(btn=>{
@@ -1090,7 +1123,7 @@ function resultsListHtml(editable){
 }
 function resultsPropCardsHtml(editable){
   const pg=propResults.pg, pm=propResults.pm;
-  const gCtrl = editable ? stepper("pg",pg??0) : '<span class="sval">'+(pg!=null?pg:'–')+'</span>';
+  const gCtrl = editable ? minuteInputHtml(pg) : '<span class="sval">'+(pg!=null?minuteLabel(pg):'–')+'</span>';
   const choices = PROP_METHODS.map(o=>'<button class="pchoice'+(pm===o?' on':'')+'" data-v="'+o+'"'+(editable?'':' disabled')+'>'+o+'</button>').join('');
   return '<div class="propcard'+(pg!=null?' scored':'')+'" data-propid="pg">'
       +'<div class="meta"><span class="metaL"><span class="grp">BONUS</span><span class="minpill">+1 PT</span></span><span>'+(pg!=null?'✓ result in':'')+'</span></div>'
@@ -1159,7 +1192,7 @@ function propRevealHtml(all,locked,day,propPts){
   const dayShort=day.replace(/^\w+\s/,"");
   const hiddenRow='<div class="pr"><span class="miss">🔒 Picks hidden until matchday ('+dayShort+')</span></div>';
   let h='<div class="propreveal"><div class="top"><span class="grp">BONUS</span><span class="nm">⚽ First Goal Minute</span>'
-    +(propResults.pg!=null?'<span class="sc">'+propResults.pg+"'</span>":'<span class="sc tbd">TBD</span>')
+    +(propResults.pg!=null?'<span class="sc">'+minuteLabel(propResults.pg)+'</span>':'<span class="sc tbd">TBD</span>')
     +'</div><div class="plist">';
   if(!locked){ h+=hiddenRow; }
   else{
@@ -1168,7 +1201,7 @@ function propRevealHtml(all,locked,day,propPts){
       if(g==null){h+='<div class="pr"><span class="pn">'+pl.n+'</span><span class="miss">— no pick</span></div>';return;}
       const pts=propPts[pl.n].pg;
       const pp=pts==null?'':'<span class="pp '+(pts?'p3':'p0')+'">+'+pts+'</span>';
-      h+='<div class="pr"><span class="pn">'+pl.n+'</span><span class="pv">'+g+"'</span>"+pp+'</div>';
+      h+='<div class="pr"><span class="pn">'+pl.n+'</span><span class="pv" style="font-size:'+(g==="NG"?'13px':'15px')+'">'+minuteLabel(g)+'</span>'+pp+'</div>';
     });
   }
   h+='</div></div>';
