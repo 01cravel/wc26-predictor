@@ -733,10 +733,15 @@ function newGamesPrompt(){
   const newOpen=newGames.length;
   if(newOpen<=0) return;
   const plural=newOpen>1;
+  // When the Final is the (only) new game, call it out by name — plus the two bonus bets under it.
+  const single=!plural?newGames[0]:null;
+  const isFinal=single&&single.stage==="final";
   showModal({
-    ico:'🎯',
-    title:"Let's knock Jonny Wood off the top spot!",
-    body:(plural?"There are <b>"+newOpen+" new games</b>":"There's <b>a new game</b>")+" to predict — get your scores in before they lock.",
+    ico: isFinal?'🏆':'🎯',
+    title: isFinal?"It's Final time!":"Let's knock Jonny Wood off the top spot!",
+    body: isFinal
+      ? "Get your score in for <b>"+single.h+" v "+single.a+"</b> — plus the two bonus bets underneath — before it locks."
+      : (plural?"There are <b>"+newOpen+" new games</b>":"There's <b>a new game</b>")+" to predict — get your scores in before they lock.",
     btn:'Predict',
     onClose:jumpToNewGames,   // anchor straight down to the new games
     btn2:"I'll do it later"
